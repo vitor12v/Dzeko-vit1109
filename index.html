@@ -92,7 +92,8 @@ canvas#orb{position:absolute;inset:0;width:100%;height:100%}
 .msg.ai:hover{background:var(--accent-soft)}
 .msg.ai.wait{color:var(--muted);font:500 13px/1.5 var(--mono);letter-spacing:.06em}
 .msg.sys{align-self:center;font:500 12px/1.4 var(--mono);color:var(--muted);text-align:center;max-width:100%}
-.msg .src{display:block;margin-top:6px;font:500 11px/1.4 var(--mono);color:var(--muted)}
+.msg .src{display:block;margin-top:6px;font:500 11px/1.6 var(--mono);color:var(--muted)}
+.msg .src a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
 .msg .err{display:block;margin-top:4px;font:500 12px/1.4 var(--mono);color:var(--danger)}
 .hello{display:flex;flex-direction:column;gap:10px}
 .eyebrow{font:500 10px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
@@ -314,6 +315,7 @@ form#ask{display:flex;gap:8px;align-items:center}
     <label class="toggle" for="fChime"><span>Bipe ao ativar<small>Som curto quando ouve a palavra.</small></span><input type="checkbox" id="fChime"></label>
     <label class="toggle" for="fGeo"><span>Usar minha localização<small>Clima e cidade no painel e nas respostas. A posição fica só neste aparelho; o clima vem do Open-Meteo.</small></span><input type="checkbox" id="fGeo"></label>
     <label class="toggle" for="fBoot"><span>Inicialização com saudação<small>Ao abrir, sequência de boot e um “bom dia” falado com hora, clima e bateria.</small></span><input type="checkbox" id="fBoot"></label>
+    <label class="toggle" for="fGsearch"><span>Conferir no Google<small>Quando eu pesquisar algo na internet, deixo a pesquisa do Google pronta para abrir no Chrome, além das fontes.</small></span><input type="checkbox" id="fGsearch"></label>
     <label class="toggle" for="fAuto"><span>Abrir apps sozinho quando der<small>O Android só deixa abrir sem toque logo depois de você mexer na tela. Senão, aparece um botão para tocar.</small></span><input type="checkbox" id="fAuto"></label>
 
     <h3>Memória</h3>
@@ -401,7 +403,7 @@ let S = Object.assign({
   name: "Dzeko", nick: "senhor", voice: true, wake: false, wakeWord: "Dzeko", chime: true, follow: true, web: true,
   voiceId: DEFAULT_VOICES[0].voice_id, model: "eleven_v4_turbo", stability: 55, speed: 1, gModel: "", gModels: [],
   engine: "auto", gVoice: "Charon", gStyle: "jarvis", gTts: "",
-  fx: true, fxAmt: 55, geo: false, boot: true, auto: true, desc: ""
+  fx: true, fxAmt: 55, geo: false, boot: true, auto: true, desc: "", gsearch: true
 }, ls.get("dzk.settings", {}));
 let K = Object.assign({ g: "", e: "", a: "", o: "" }, ls.get("dzk.keys", {}));
 let turns = ls.get("dzk.chat", []);
@@ -1034,6 +1036,18 @@ function runActions(raw){
   }
   return { links: links.slice(0, 3), blocked };
 }
+/* "pesquisa no Google X", "procura X no Chrome", "dá um Google em X" → the search terms */
+function searchQuery(t){
+  const s = String(t || "").trim();
+  const explicit = /\b(no|pelo|na)\s+(google|chrome|navegador|internet)\b|\bd[aá]\s+um\s+google\b|\bgoogla/i.test(s) || /^(?:(?:dzeko|zico|jarvis)[,\s]+)?(pesquis[ae]|procur[ae]|busc[ae])\b/i.test(s);
+  if (!explicit) return "";
+  const q = s.replace(/^(?:(?:dzeko|zico|jarvis)[,\s]+)/i, "")
+    .replace(/\b(abre|abra|abrir|faz|faça|fazer|me|pra mim|para mim|por favor|uma|um)\b/gi, " ")
+    .replace(/\b(no|pelo|na)\s+(google|chrome|navegador|internet)\b/gi, " ")
+    .replace(/\b(pesquis[ae]r?|procur[ae]r?|busc[ae]r?|googl\w*|d[aá]\s+(?:um\s+)?google)\b/gi, " ")
+    .replace(/^\s*(?:(?:sobre|por|em|o que é|o que e)\s+)+/i, "").replace(/\s+/g, " ").replace(/^[\s,:;.-]+|[\s?!.]+$/g, "").trim();
+  return q.length >= 2 ? q : "";
+}
 /* opening other apps: Android only allows it right after a touch, otherwise we show a big button */
 function openLink(url){
   if (/^(tel|sms|mailto):/i.test(url)){ location.href = url; return; }
@@ -1053,7 +1067,7 @@ function showActions(links, bubble){
   bubble.append(box); scrollDown();
   actT = setTimeout(() => { bar.innerHTML = ""; }, 90000);
   const act = navigator.userActivation;
-  if (S.auto && links.length === 1 && act && act.isActive){ setTimeout(() => openLink(links[0].url), 900); }
+  if (S.auto && links.length === 1 && !links[0].soft && act && act.isActive){ setTimeout(() => openLink(links[0].url), 900); }
 }
 
 /* ---------- Telemetry: place, weather, battery, network ---------- */
@@ -1180,7 +1194,8 @@ Você executa ações escrevendo comandos no FINAL da resposta, cada um em linha
 [[rota: destino | modo]] abre a navegação até o destino (modo opcional: carro, a pé, bicicleta, transporte). Para "mais perto", use o tipo do lugar como destino, ex.: "posto de gasolina".
 [[mapa: busca]] mostra lugares no mapa.
 [[musica: artista ou música | spotify ou youtube]] toca música (Spotify por padrão).
-[[youtube: busca]] abre vídeos. [[pesquisar: termo]] abre uma pesquisa no Google.
+[[youtube: busca]] abre vídeos.
+[[pesquisar: termos]] abre a pesquisa no Google pelo Chrome. Use SEMPRE que o usuário pedir para pesquisar, procurar, buscar ou "dar um Google", e diga que deixou a pesquisa aberta. Também use quando responder sobre notícias, preços, placares, pessoas, lugares, produtos ou qualquer fato da internet, para ele conferir as fontes: termos curtos e objetivos, como se digita no Google.
 [[agenda: título | AAAA-MM-DDTHH:MM | duração em minutos]] prepara um compromisso no Google Agenda. Calcule a data a partir de agora. Sem hora, use só AAAA-MM-DD.
 [[copiar: texto]] copia texto para a área de transferência.
 Para abrir apps, mensagens, ligações e agenda, o usuário confirma com um toque no botão que aparece, porque o Android exige isso. Então diga algo como "Preparado, é só tocar para enviar" em vez de afirmar que já enviou.
@@ -1234,12 +1249,12 @@ async function streamGemini(contents, onText, signal){
               let j; try { j = JSON.parse(line.slice(5)); } catch { continue; }
               const cand = j.candidates && j.candidates[0];
               const gm = cand && cand.groundingMetadata;
-              if (gm && gm.groundingChunks) for (const ch of gm.groundingChunks){ const w = ch.web; if (w && (w.title || w.uri)) sources.set(w.title || w.uri, w.uri || ""); }
+              if (gm && gm.groundingChunks) for (const ch of gm.groundingChunks){ const w = ch.web; if (w && w.uri && !sources.has(w.title || w.uri)) sources.set(w.title || w.uri, w.uri); }
               const parts = (cand && cand.content && cand.content.parts) || [];
               for (const p of parts) if (p.text && !p.thought){ full += p.text; onText(full); }
             }
           }
-          lastMeta = { sources: [...sources.keys()].slice(0, 4), noWeb: S.web && !web };
+          lastMeta = { sources: [...sources].slice(0, 5).map(([title, uri]) => ({ title, uri })), noWeb: S.web && !web };
           return full;
         }
         let detail = ""; try { detail = (await r.json()).error.message || ""; } catch {}
@@ -1365,8 +1380,22 @@ async function send(text){
     if (vis.length > spokenLen) feed(vis.slice(spokenLen));
     flushFeed();
     const acts = runActions(raw);
+    /* "search in Chrome": an explicit request always gets a Google search, even if the brain forgot the command */
+    const sq = searchQuery(text);
+    if (sq && !acts.links.some(l => /google\.com\/search/.test(l.url))) acts.links.unshift(buildAction("pesquisar", sq));
+    else if (S.gsearch && !acts.links.length && lastMeta.sources.length) acts.links.push(Object.assign(buildAction("pesquisar", text.slice(0, 120)), { label: "Conferir no Google", soft: true }));
+    /* a search the brain added on its own to an ordinary question is offered, not forced open */
+    if (!sq) acts.links.forEach(l => { if (/google\.com\/search/.test(l.url)){ l.soft = true; l.label = "Conferir no Google"; } });
     bubble.className = "msg ai"; bubble.textContent = vis || "Feito.";
-    if (lastMeta.sources.length){ const sEl = document.createElement("span"); sEl.className = "src"; sEl.textContent = "Pesquisou: " + lastMeta.sources.join(" · "); bubble.append(sEl); }
+    if (lastMeta.sources.length){
+      const sEl = document.createElement("span"); sEl.className = "src"; sEl.append("Fontes: ");
+      lastMeta.sources.forEach((x, i) => {
+        if (i) sEl.append(" · ");
+        const a = document.createElement("a"); a.href = x.uri; a.target = "_blank"; a.rel = "noopener"; a.textContent = x.title.replace(/^www\./, "");
+        sEl.append(a);
+      });
+      bubble.append(sEl);
+    }
     showActions(acts.links, bubble);
     if (acts.blocked) addMsg("sys", "🔒 Protocolo de segurança: bancos, pagamentos, galeria e arquivos não são abertos pelo assistente.");
     if (lastMeta.noWeb) hint("A pesquisa na internet ficou sem cota agora, então esta resposta não foi conferida online.");
@@ -1398,7 +1427,7 @@ $("#ask").addEventListener("submit", e => {
 });
 $("#sugs").addEventListener("click", e => { const b = e.target.closest(".sug"); if (b) send(b.textContent); });
 logEl.addEventListener("click", e => {
-  if (e.target.closest(".act")) return;
+  if (e.target.closest(".act, a")) return;
   const m = e.target.closest(".msg.ai"); if (!m || m.classList.contains("wait")) return;
   const t = [...m.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(" ");
   stopSpeech(); speak(t);
@@ -1461,7 +1490,7 @@ function fillSettings(){
   $("#fFollow").checked = S.follow; $("#fWeb").checked = S.web; $("#fChime").checked = S.chime;
   $("#fModel").value = S.model; $("#fStab").value = S.stability; $("#fSpeed").value = S.speed;
   $("#fFx").checked = S.fx; $("#fFxAmt").value = S.fxAmt; $("#fxVal").textContent = S.fxAmt + "%"; $("#fxBox").hidden = !S.fx;
-  $("#fGeo").checked = S.geo; $("#fBoot").checked = S.boot; $("#fAuto").checked = S.auto;
+  $("#fGeo").checked = S.geo; $("#fBoot").checked = S.boot; $("#fAuto").checked = S.auto; $("#fGsearch").checked = S.gsearch;
   if (!$("#fDesc").value) $("#fDesc").value = S.desc || DEFAULT_DESC;
   $("#dBox").hidden = !K.e;
   $("#stabVal").textContent = S.stability + "%"; $("#speedVal").textContent = (+S.speed).toFixed(2);
@@ -1568,6 +1597,7 @@ $("#fFxAmt").onchange = sample;
 $("#fGeo").onchange = e => { S.geo = e.target.checked; save(); if (S.geo) locate(true); else { T.city = ""; T.temp = null; ls.set("dzk.geo", null); renderTelem(); } };
 $("#fBoot").onchange = e => { S.boot = e.target.checked; save(); };
 $("#fAuto").onchange = e => { S.auto = e.target.checked; save(); };
+$("#fGsearch").onchange = e => { S.gsearch = e.target.checked; save(); };
 
 $("#reloadVoices").onclick = async () => { $("#voiceInfo").textContent = "Buscando vozes…"; const ok = await fetchVoices(); renderVoices(); if (!ok && K.e) $("#voiceInfo").textContent = "Não consegui ler as vozes. A chave precisa da permissão Voices (leitura)."; };
 $("#voiceBtn").onclick = () => { S.voice = !S.voice; if (!S.voice) stopSpeech(); apply(); if (S.voice) speak(`Voz ligada, ${S.nick}.`); else hint(""); };
