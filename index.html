@@ -1222,7 +1222,7 @@ async function research(text){
 const G = "https://generativelanguage.googleapis.com/v1beta";
 /* the key goes in a header: works for both the old AIza… keys and the new AQ.… Auth keys */
 const gHeaders = (key = K.g) => ({ "Content-Type": "application/json", "x-goog-api-key": String(key || "").trim() });
-const FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
+const FALLBACK_MODELS = ["gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-flash-latest"];
 function rankModels(list){
   const ver = n => { const m = n.match(/gemini-(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; };
   const score = n => (/-flash$/.test(n) ? 3000 : /-flash-lite$/.test(n) ? 2000 : /flash/.test(n) && !/(preview|exp|image|tts|live|audio|thinking)/.test(n) ? 1000 : 0) + ver(n) * 10;
@@ -1312,12 +1312,16 @@ function geminiError(status, detail){
 let lastMeta = { sources: [], noWeb: false };
 async function streamGemini(contents, onText, signal){
   if (!S.gModels.length){ try { S.gModels = await listModels(K.g); } catch { S.gModels = []; } if (!S.gModels.length) S.gModels = FALLBACK_MODELS.slice(); save(); }
-  const models = [S.gModel, ...S.gModels].filter((m, i, a) => m && a.indexOf(m) === i);
-  let think = true, lastErr = null;
-  /* Google Search grounding first — unless our own research already has the facts, or the key has no search quota (then rest it for 6 h) */
+  /* models that were overloaded, too slow or out of quota rest for 10 minutes; the last fast one goes first */
+  const cool = ls.get("dzk.gCool", {}) || {}, now = Date.now();
+  const all = [S.gModel, ...S.gModels].filter((m, i, a) => m && a.indexOf(m) === i);
+  let models = all.filter(m => !(cool[m] > now));
+  if (!models.length) models = all;
+  const rest = (m, ms) => { cool[m] = Date.now() + ms; ls.set("dzk.gCool", cool); if (S.gModel === m){ S.gModel = ""; save(); } };
   const hasResearch = !!(curResearch && curResearch.text);
-  const groundOK = S.web && !hasResearch && Date.now() > (ls.get("dzk.groundOff", 0) || 0);
+  const groundOK = S.web && !hasResearch && now > (ls.get("dzk.groundOff", 0) || 0);
   const modes = groundOK ? [true, false] : [false];
+  let think = true, lastErr = null, got = false;
   for (const web of modes){
     let tried = 0;
     for (const model of models){
@@ -1326,40 +1330,52 @@ async function streamGemini(contents, onText, signal){
         const body = { system_instruction: { parts: [{ text: rules(web) }] }, contents, generationConfig: { temperature: .8, maxOutputTokens: 700 } };
         if (think) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
         if (web) body.tools = [{ google_search: {} }];
-        const r = await fetch(`${G}/models/${model}:streamGenerateContent?alt=sse`, {
-          method: "POST", headers: gHeaders(), body: JSON.stringify(body), signal
-        });
-        if (r.ok){
-          if (S.gModel !== model){ S.gModel = model; save(); }
-          const reader = r.body.getReader(), dec = new TextDecoder();
-          let buf = "", full = ""; const sources = new Map();
-          for (;;){
-            const { done, value } = await reader.read(); if (done) break;
-            buf += dec.decode(value, { stream: true });
-            let i;
-            while ((i = buf.indexOf("\n")) >= 0){
-              const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-              if (!line.startsWith("data:")) continue;
-              let j; try { j = JSON.parse(line.slice(5)); } catch { continue; }
-              const cand = j.candidates && j.candidates[0];
-              const gm = cand && cand.groundingMetadata;
-              if (gm && gm.groundingChunks) for (const ch of gm.groundingChunks){ const w = ch.web; if (w && w.uri && !sources.has(w.title || w.uri)) sources.set(w.title || w.uri, w.uri); }
-              const parts = (cand && cand.content && cand.content.parts) || [];
-              for (const p of parts) if (p.text && !p.thought){ full += p.text; onText(full); }
+        /* our own abort: the user's Stop, or no first word within 12 s */
+        const mctl = new AbortController(); const fwd = () => mctl.abort(); signal.addEventListener("abort", fwd);
+        let slow = false; const firstT = setTimeout(() => { slow = true; mctl.abort(); }, 9000);
+        try {
+          const r = await fetch(`${G}/models/${model}:streamGenerateContent?alt=sse`, { method: "POST", headers: gHeaders(), body: JSON.stringify(body), signal: mctl.signal });
+          if (r.ok){
+            const reader = r.body.getReader(), dec = new TextDecoder();
+            let buf = "", full = ""; const sources = new Map();
+            for (;;){
+              const { done, value } = await reader.read(); if (done) break;
+              buf += dec.decode(value, { stream: true });
+              let i;
+              while ((i = buf.indexOf("\n")) >= 0){
+                const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+                if (!line.startsWith("data:")) continue;
+                let j; try { j = JSON.parse(line.slice(5)); } catch { continue; }
+                const cand = j.candidates && j.candidates[0];
+                const gm = cand && cand.groundingMetadata;
+                if (gm && gm.groundingChunks) for (const ch of gm.groundingChunks){ const w = ch.web; if (w && w.uri && !sources.has(w.title || w.uri)) sources.set(w.title || w.uri, w.uri); }
+                const parts = (cand && cand.content && cand.content.parts) || [];
+                for (const p of parts) if (p.text && !p.thought){ if (!got){ got = true; clearTimeout(firstT); } full += p.text; onText(full); }
+              }
             }
+            clearTimeout(firstT);
+            if (!full.trim()){ lastErr = { status: 204, detail: "resposta vazia" }; break; }
+            if (S.gModel !== model){ S.gModel = model; save(); }
+            const grounded = [...sources].slice(0, 5).map(([title, uri]) => ({ title, uri }));
+            lastMeta = { sources: grounded.length ? grounded : hasResearch ? curResearch.sources : [], noWeb: S.web && !web && !hasResearch };
+            return full;
           }
-          const grounded = [...sources].slice(0, 5).map(([title, uri]) => ({ title, uri }));
-          lastMeta = { sources: grounded.length ? grounded : hasResearch ? curResearch.sources : [], noWeb: S.web && !web && !hasResearch };
-          return full;
-        }
-        let detail = ""; try { detail = (await r.json()).error.message || ""; } catch {}
-        lastErr = { status: r.status, detail };
-        if (r.status === 400 && think && /thinking|budget/i.test(detail)){ think = false; continue; }
-        break;
+          let detail = ""; try { detail = (await r.json()).error.message || ""; } catch {}
+          lastErr = { status: r.status, detail };
+          if (r.status === 400 && think && /thinking|budget|invalid argument/i.test(detail)){ think = false; continue; }
+          break;
+        } catch (e){
+          if (signal.aborted) throw e;            /* the user pressed Stop */
+          if (got) throw e;                       /* already talking: don't switch brains mid-sentence */
+          lastErr = { status: slow ? 408 : 0, detail: slow ? "demorou demais" : "falha de rede" };
+          if (slow) rest(model, 10 * 60e3);
+          break;
+        } finally { clearTimeout(firstT); signal.removeEventListener("abort", fwd); }
       }
-      if ((lastErr.status === 400 && /api key/i.test(lastErr.detail)) || lastErr.status === 401 || lastErr.status === 403){ const e = new Error(geminiError(lastErr.status, lastErr.detail)); e.status = lastErr.status; throw e; }
-      if (lastErr.status === 404 && /no longer available|not found|is not supported/i.test(lastErr.detail)){ S.gModels = S.gModels.filter(m => m !== model); if (S.gModel === model) S.gModel = ""; save(); }
+      if ((lastErr.status === 400 && /api key/i.test(lastErr.detail)) || lastErr.status === 401 || lastErr.status === 403 && !web){ const e = new Error(geminiError(lastErr.status, lastErr.detail)); e.status = lastErr.status; throw e; }
+      if (lastErr.status === 404){ S.gModels = S.gModels.filter(m => m !== model); if (S.gModel === model) S.gModel = ""; save(); }
       if (web && (lastErr.status === 429 || lastErr.status === 403 || (lastErr.status === 400 && /search|tool|grounding/i.test(lastErr.detail)))){ ls.set("dzk.groundOff", Date.now() + 6 * 3600e3); break; }
+      if (!web && (lastErr.status === 503 || lastErr.status === 429 || lastErr.status === 500)) rest(model, 10 * 60e3);
     }
   }
   const e = new Error(geminiError(lastErr && lastErr.status, lastErr && lastErr.detail)); e.status = lastErr && lastErr.status; throw e;
