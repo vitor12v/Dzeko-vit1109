@@ -1130,11 +1130,99 @@ function telemetryText(){
   return out.join("\n");
 }
 
+/* ---------- Own web research: news, prices, facts — works without the Gemini search quota ---------- */
+let curResearch = null;
+const RSS = u => "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(u);
+const GN = "hl=pt-BR&gl=BR&ceid=BR:pt-419";
+const WAKE_PREFIX = /^(?:(?:dzeko|zico|zeko|jarvis)[,\s]+)/i;
+const COMMAND_RE = /^(?:(?:dzeko|zico|zeko|jarvis)[,\s]+)?(p[õo]e|coloca|cria|marca|agenda|anota|apaga|cancela|liga|desliga|abre|abra|toca|tocar|manda|envia|me leva|me acorda|lembra|timer|alarme|navega|rota|copia)\b/i;
+const NEWS_RE = /not[ií]cia|manchete|aconte(ceu|cendo)|[uú]ltimas|novidade|lan[çc]amento|lan[çc]a\b|estreia|placar|jogo d[oa]|jogou|ganhou|venceu|perdeu|empat|resultado|campeonato|brasileir[ãa]o|libertadores|\bcopa\b|elei[çc]|morreu|preso|hoje|ontem|amanh[ãa]|esta semana|essa semana|\bagora\b|\batual|pre[çc]o|quanto custa|quando (sai|vai|[ée]|come[çc]a)|presidente|t[ée]cnico|treinador|\bceo\b/i;
+const FACT_RE = /^(?:(?:dzeko|zico|zeko|jarvis)[,\s]+)?(quem (é|e|foi|era|s[ãa]o)|o que (é|e|foi|significa|aconteceu)|onde (fica|é|e)|qual (é|e|foi|a|o)|quantos|quantas|quanto|quando|hist[oó]ria d|me (fala|conta|explica) (sobre|de|da|do|o que)|como (funciona|surgiu))/i;
+const FX = [["d[oó]lar canadense", "CAD-BRL"], ["d[oó]lar", "USD-BRL"], ["euro", "EUR-BRL"], ["bitcoin|\\bbtc\\b", "BTC-BRL"], ["libra", "GBP-BRL"], ["iene", "JPY-BRL"], ["peso argentino", "ARS-BRL"], ["ethereum|\\beth\\b", "ETH-BRL"]];
+/* word-by-word (JS \b breaks on accented letters like "é") */
+const STOP = new Set("me diz diga fala conta explica traz traga mostra você voce sabe dizer por favor senhor pra para mim qual quais quem quando onde como o que é e foi está esta tá ta tem teve as os a o de da do das dos sobre um uma aí ai hein aquele aquela isso esse essa".split(" "));
+function topicOf(t){
+  return String(t).replace(WAKE_PREFIX, "").replace(/[?!.,;:"“”]+/g, " ").split(/\s+/).filter(w => w && !STOP.has(w.toLowerCase())).join(" ").trim();
+}
+async function getJSON(u, ms = 7000){
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try { const r = await fetch(u, { signal: ctl.signal }); if (!r.ok) return null; return await r.json(); } catch { return null; } finally { clearTimeout(t); }
+}
+function whenTxt(s){
+  if (!s) return "";
+  const iso = String(s).trim().replace(" ", "T"); const d = new Date(/(Z|[+-]\d\d:?\d\d)$/.test(iso) ? iso : iso + "Z");
+  return isNaN(d) ? "" : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+async function newsSearch(q){
+  /* Bing answers searches fast; Google News is the fallback (and the source for top headlines) */
+  const feeds = q
+    ? [RSS(`https://www.bing.com/news/search?q=${enc(q)}&format=rss&setlang=pt-BR&cc=BR`), RSS(`https://news.google.com/rss/search?q=${enc(q)}&${GN}`)]
+    : [RSS(`https://news.google.com/rss?${GN}`), RSS("https://g1.globo.com/rss/g1/")];
+  for (const f of feeds){
+    const j = await getJSON(f, 6000);
+    if (!j || !j.items || !j.items.length) continue;
+    return j.items.slice(0, 7).map(i => {
+      let title = String(i.title || "").trim(), src = String(i.author || "").trim();
+      const m = title.match(/^(.*\S)\s+-\s+([^-]{2,48})$/); if (m){ title = m[1]; src = src || m[2]; }
+      let link = i.link || "";
+      try { const real = new URL(link).searchParams.get("url"); if (real && /^https?:/i.test(real)) link = real; } catch {}
+      if (!src || /bing\.com/i.test(src)){ try { src = new URL(link).hostname.replace(/^(www|m|amp)\./, ""); } catch {} }
+      let desc = String(i.description || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+      if (desc.toLowerCase().startsWith(title.slice(0, 25).toLowerCase())) desc = "";
+      return { title, src, when: whenTxt(i.pubDate), link, desc: desc.slice(0, 220) };
+    });
+  }
+  return [];
+}
+async function quotes(t){
+  const pairs = []; let rest = t;
+  for (const [re, p] of FX){ const r = new RegExp(re, "i"); if (r.test(rest)){ pairs.push(p); rest = rest.replace(r, " "); } }
+  if (!pairs.length && /cota[çc][ãa]o|c[aâ]mbio|moedas?/i.test(t)) pairs.push("USD-BRL", "EUR-BRL");
+  if (!pairs.length) return [];
+  const j = await getJSON(`https://economia.awesomeapi.com.br/json/last/${pairs.join(",")}`);
+  if (!j) return [];
+  const brl = v => (+v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: +v < 1 ? 4 : 2 });
+  return Object.values(j).map(x => `${x.name}: compra R$ ${brl(x.bid)}, venda R$ ${brl(x.ask)}, variação no dia ${(+x.pctChange).toLocaleString("pt-BR")}%, máxima R$ ${brl(x.high)}, mínima R$ ${brl(x.low)} (atualizado ${new Date(+x.timestamp * 1000).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })})`);
+}
+async function wiki(q){
+  const s = await getJSON(`https://pt.wikipedia.org/w/api.php?origin=*&action=query&list=search&srsearch=${enc(q)}&format=json&srlimit=1`);
+  const hit = s && s.query && s.query.search && s.query.search[0]; if (!hit) return null;
+  const pg = await getJSON(`https://pt.wikipedia.org/api/rest_v1/page/summary/${enc(hit.title.replace(/ /g, "_"))}`);
+  if (!pg || !pg.extract) return null;
+  return { title: pg.title, extract: pg.extract.slice(0, 900), link: (pg.content_urls && pg.content_urls.mobile && pg.content_urls.mobile.page) || `https://pt.wikipedia.org/wiki/${enc(hit.title)}` };
+}
+async function research(text){
+  const t = String(text || "").trim();
+  const explicit = searchQuery(t);
+  const isCmd = COMMAND_RE.test(t) && !explicit;
+  const wantsFx = FX.some(([re]) => new RegExp(re, "i").test(t)) || /cota[çc][ãa]o|c[aâ]mbio/i.test(t);
+  const wantsNews = !isCmd && (!!explicit || NEWS_RE.test(t));
+  const wantsFact = !isCmd && (FACT_RE.test(t) || !!explicit);
+  if (!wantsFx && !wantsNews && !wantsFact) return null;
+  const topic = explicit || topicOf(t);
+  const core = topic.replace(/\b(not[ií]cias?|manchetes?|importantes?|principais|[uú]ltimas|mais|novidades|dia|hoje|agora|brasil|mundo|tem|alguma|algo|aí|ai)\b/gi, " ").replace(/\s+/g, " ").trim();
+  const newsQ = core ? topic.replace(/\b(not[ií]cias?|manchetes?|[uú]ltimas|novidades)\b/gi, " ").replace(/\s+/g, " ").trim() : "";
+  const [n, f, w] = await Promise.all([
+    (wantsNews || wantsFact) && (!wantsFx || /not[ií]cia/i.test(t)) ? newsSearch(newsQ) : [],
+    wantsFx ? quotes(t) : [],
+    wantsFact && core.length > 1 && !wantsFx ? wiki(core) : null
+  ]);
+  const lines = [], sources = [];
+  if (f.length){ lines.push("Cotações agora (AwesomeAPI):", ...f.map(x => "- " + x)); }
+  if (n.length){
+    lines.push(newsQ ? `Notícias recentes sobre "${newsQ}" (Google Notícias / Bing), mais relevantes primeiro:` : "Principais notícias de agora (Google Notícias / G1):");
+    n.forEach(x => lines.push(`- ${x.title} — ${x.src}${x.when ? ", " + x.when : ""}${x.desc ? ": " + x.desc : ""}`));
+    const seen = new Set(); n.forEach(x => { if (x.link && !seen.has(x.src) && sources.length < 4){ seen.add(x.src); sources.push({ title: x.src || "notícia", uri: x.link }); } });
+  }
+  if (w){ lines.push(`Wikipédia — ${w.title}: ${w.extract}`); sources.push({ title: "Wikipédia", uri: w.link }); }
+  return { text: lines.join("\n"), sources, tried: true, query: newsQ || core || topic };
+}
+
 /* ---------- Brain (Gemini) ---------- */
 const G = "https://generativelanguage.googleapis.com/v1beta";
 /* the key goes in a header: works for both the old AIza… keys and the new AQ.… Auth keys */
 const gHeaders = (key = K.g) => ({ "Content-Type": "application/json", "x-goog-api-key": String(key || "").trim() });
-const FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+const FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
 function rankModels(list){
   const ver = n => { const m = n.match(/gemini-(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; };
   const score = n => (/-flash$/.test(n) ? 3000 : /-flash-lite$/.test(n) ? 2000 : /flash/.test(n) && !/(preview|exp|image|tts|live|audio|thinking)/.test(n) ? 1000 : 0) + ver(n) * 10;
@@ -1178,7 +1266,9 @@ Responda como um briefing de JARVIS em 3 a 5 frases: saudação pela hora, clima
 CONTEXTO AGORA
 Data e hora: ${when} (formato máquina: ${iso}).
 ${telemetryText()}
-${web ? "Você tem pesquisa do Google. Para notícias, placares, jogos, preços, cotações, resultados ou qualquer coisa sobre hoje ou esta semana, SEMPRE pesquise antes de responder; nunca responda de memória sobre fatos atuais. Para o clima local, prefira a telemetria acima. Cite a fonte de forma falada e breve quando importar." : "Nesta resposta você está SEM internet. Se pedirem notícias ou fatos de hoje, diga com franqueza que a pesquisa está indisponível agora, em vez de inventar. O clima da telemetria acima continua válido."}
+${curResearch && curResearch.text ? `PESQUISA NA INTERNET feita agora pelo próprio ${S.name} (dados reais e atuais). Use como fonte principal, resuma no seu estilo, cite o veículo de forma falada e breve quando importar, e não invente nada além disso:
+${curResearch.text}
+` : ""}${web ? "Você também tem a pesquisa do Google. Para notícias, placares, preços, cotações ou qualquer coisa sobre hoje que não esteja acima, pesquise antes de responder; nunca responda de memória sobre fatos atuais. Para o clima local, prefira a telemetria." : curResearch && curResearch.text ? "" : curResearch && curResearch.tried ? "A pesquisa automática não achou resultados para este pedido. Diga isso com naturalidade, responda o que souber deixando claro que pode estar desatualizado, e inclua [[pesquisar: termos]] para o usuário ver no Google. NUNCA diga que está sem internet ou sem conexão." : "Se pedirem fatos de hoje que não estejam acima, diga que não conferiu online e inclua [[pesquisar: termos]] para o usuário ver no Google. NUNCA diga que está sem internet ou sem conexão."}
 
 AÇÕES
 Você executa ações escrevendo comandos no FINAL da resposta, cada um em linha própria. Eles não são falados nem mostrados. Use só quando o usuário pedir ou quando for claramente o que ele quer.
@@ -1224,10 +1314,14 @@ async function streamGemini(contents, onText, signal){
   if (!S.gModels.length){ try { S.gModels = await listModels(K.g); } catch { S.gModels = []; } if (!S.gModels.length) S.gModels = FALLBACK_MODELS.slice(); save(); }
   const models = [S.gModel, ...S.gModels].filter((m, i, a) => m && a.indexOf(m) === i);
   let think = true, lastErr = null;
-  /* first every model WITH internet search, only then without it */
-  const modes = S.web ? [true, false] : [false];
+  /* Google Search grounding first — unless our own research already has the facts, or the key has no search quota (then rest it for 6 h) */
+  const hasResearch = !!(curResearch && curResearch.text);
+  const groundOK = S.web && !hasResearch && Date.now() > (ls.get("dzk.groundOff", 0) || 0);
+  const modes = groundOK ? [true, false] : [false];
   for (const web of modes){
+    let tried = 0;
     for (const model of models){
+      if (web && ++tried > 2) break;
       for (let attempt = 0; attempt < 2; attempt++){
         const body = { system_instruction: { parts: [{ text: rules(web) }] }, contents, generationConfig: { temperature: .8, maxOutputTokens: 700 } };
         if (think) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
@@ -1254,7 +1348,8 @@ async function streamGemini(contents, onText, signal){
               for (const p of parts) if (p.text && !p.thought){ full += p.text; onText(full); }
             }
           }
-          lastMeta = { sources: [...sources].slice(0, 5).map(([title, uri]) => ({ title, uri })), noWeb: S.web && !web };
+          const grounded = [...sources].slice(0, 5).map(([title, uri]) => ({ title, uri }));
+          lastMeta = { sources: grounded.length ? grounded : hasResearch ? curResearch.sources : [], noWeb: S.web && !web && !hasResearch };
           return full;
         }
         let detail = ""; try { detail = (await r.json()).error.message || ""; } catch {}
@@ -1263,7 +1358,8 @@ async function streamGemini(contents, onText, signal){
         break;
       }
       if ((lastErr.status === 400 && /api key/i.test(lastErr.detail)) || lastErr.status === 401 || lastErr.status === 403){ const e = new Error(geminiError(lastErr.status, lastErr.detail)); e.status = lastErr.status; throw e; }
-      if (web && lastErr.status === 400 && /search|tool|grounding/i.test(lastErr.detail)) break;
+      if (lastErr.status === 404 && /no longer available|not found|is not supported/i.test(lastErr.detail)){ S.gModels = S.gModels.filter(m => m !== model); if (S.gModel === model) S.gModel = ""; save(); }
+      if (web && (lastErr.status === 429 || lastErr.status === 403 || (lastErr.status === 400 && /search|tool|grounding/i.test(lastErr.detail)))){ ls.set("dzk.groundOff", Date.now() + 6 * 3600e3); break; }
     }
   }
   const e = new Error(geminiError(lastErr && lastErr.status, lastErr && lastErr.detail)); e.status = lastErr && lastErr.status; throw e;
@@ -1338,6 +1434,7 @@ async function think(merged, onText, signal){
     try {
       lastMeta = { sources: [], noWeb: S.web && b.id !== "gemini" };
       const out = await b.run(merged, t => { got = true; onText(t); }, signal);
+      if (curResearch && curResearch.text){ lastMeta.noWeb = false; if (!lastMeta.sources.length) lastMeta.sources = curResearch.sources; }
       if (errs.length) hint(`${errs.map(e => e.who).join(" e ")} indisponível agora; quem respondeu foi o ${b.name}.`);
       return out;
     } catch (e){
@@ -1369,6 +1466,15 @@ async function send(text){
   const merged = [];
   for (const c of contents){ const last = merged[merged.length - 1]; if (last && last.role === c.role) last.parts[0].text += "\n" + c.parts[0].text; else merged.push(c); }
   try {
+    curResearch = null;
+    try {
+      const pending = research(text);
+      const peek = await Promise.race([pending, sleep(50).then(() => "slow")]);
+      if (peek === "slow"){ bubble.textContent = "Pesquisando na internet…"; setChip("busy", "Pesquisando"); }
+      curResearch = peek === "slow" ? await pending : peek;
+    } catch { curResearch = null; }
+    if (ctl.signal.aborted) throw new DOMException("aborted", "AbortError");
+    if (curResearch && curResearch.text){ bubble.textContent = "Lendo os resultados…"; setChip("busy", "Pensando"); }
     raw = await think(merged, full => {
       raw = full;
       const vis = visible(full);
@@ -1383,7 +1489,7 @@ async function send(text){
     /* "search in Chrome": an explicit request always gets a Google search, even if the brain forgot the command */
     const sq = searchQuery(text);
     if (sq && !acts.links.some(l => /google\.com\/search/.test(l.url))) acts.links.unshift(buildAction("pesquisar", sq));
-    else if (S.gsearch && !acts.links.length && lastMeta.sources.length) acts.links.push(Object.assign(buildAction("pesquisar", text.slice(0, 120)), { label: "Conferir no Google", soft: true }));
+    else if (S.gsearch && !acts.links.length && (lastMeta.sources.length || (curResearch && curResearch.tried))) acts.links.push(Object.assign(buildAction("pesquisar", (curResearch && curResearch.query) || text.slice(0, 120)), { label: "Conferir no Google", soft: true }));
     /* a search the brain added on its own to an ordinary question is offered, not forced open */
     if (!sq) acts.links.forEach(l => { if (/google\.com\/search/.test(l.url)){ l.soft = true; l.label = "Conferir no Google"; } });
     bubble.className = "msg ai"; bubble.textContent = vis || "Feito.";
@@ -1398,7 +1504,7 @@ async function send(text){
     }
     showActions(acts.links, bubble);
     if (acts.blocked) addMsg("sys", "🔒 Protocolo de segurança: bancos, pagamentos, galeria e arquivos não são abertos pelo assistente.");
-    if (lastMeta.noWeb) hint("A pesquisa na internet ficou sem cota agora, então esta resposta não foi conferida online.");
+    if (lastMeta.noWeb && curResearch && curResearch.tried) hint("Não achei nada online sobre isso agora. Deixei a pesquisa do Google pronta para você conferir.");
     turns.push({ role: "assistant", content: vis || "Feito." });
     saveChat();
     if (!vis) speak("Feito.");
