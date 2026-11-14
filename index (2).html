@@ -1,0 +1,1779 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#050A13">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Dzeko</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=Saira:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen HUD console — header, holographic core reacting to the real voice, wake-word control, transcript, input dock. Single dark-blue look. */
+:root{
+  color-scheme:dark;
+  --bg:#050A13; --surface:#0B1422; --surface-2:#0F1B2E; --line:#1B2B44; --line-hi:#2B4468;
+  --fg:#DCE7F6; --muted:#7D91AE; --accent:#4DB4FF; --accent-2:#2C6BFF; --accent-ink:#03101F;
+  --accent-soft:rgba(77,180,255,.12); --glow:rgba(77,180,255,.35); --ok:#5BE0A5; --warn:#FFC657; --danger:#FF7D88;
+  --display:"Chakra Petch",ui-sans-serif,system-ui,sans-serif;
+  --body:"Saira",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --orb:min(64vw,33vh,300px);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow-x:hidden}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);display:flex;flex-direction:column;overflow:hidden;
+  background-image:radial-gradient(ellipse 80% 45% at 50% 30%,rgba(44,107,255,.10),transparent 70%),
+    linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:auto,44px 44px,44px 44px;background-position:center}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(180deg,var(--bg) 0%,rgba(5,10,19,.55) 30%,rgba(5,10,19,.55) 70%,var(--bg) 100%);z-index:0}
+[hidden]{display:none!important}
+header,main,.dock{position:relative;z-index:1}
+.wrap{width:100%;max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button{font:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cut{clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px))}
+
+header{flex:none;border-bottom:1px solid var(--line);background:rgba(5,10,19,.8)}
+header .wrap{display:flex;align-items:center;gap:10px;padding-block:10px}
+.logo{width:40px;height:40px;flex:none;display:grid;place-items:center;border:1px solid var(--accent);color:var(--accent);font:600 20px/1 var(--display);background:var(--accent-soft)}
+.brandbox{display:flex;flex-direction:column;gap:3px;min-width:0}
+.brand{font:600 19px/1 var(--display);letter-spacing:.22em;text-transform:uppercase}
+.sub{font:500 10px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.spacer{flex:1}
+.chip{font:500 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.chip i{width:7px;height:7px;background:var(--muted)}
+.chip[data-s="online"] i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.chip[data-s="busy"] i{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.chip[data-s="off"] i{background:var(--danger)}
+.iconbtn{appearance:none;border:1px solid var(--line-hi);background:var(--surface);color:var(--accent);width:40px;height:40px;display:grid;place-items:center;cursor:pointer;flex:none}
+.iconbtn:hover{background:var(--surface-2)}
+.iconbtn svg{width:19px;height:19px}
+@media (max-width:480px){#chipText{display:none}}
+@media (max-width:360px){.sub{display:none}}
+
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+.core{flex:none;display:flex;flex-direction:column;align-items:center;gap:8px;padding-block:10px 6px}
+.hudrow{width:100%;display:flex;justify-content:space-between;gap:12px;font:500 10px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.hudrow b{color:var(--accent);font-weight:500}
+.hudrow .clock{font-variant-numeric:tabular-nums;text-align:right}
+.orbbox{position:relative;width:var(--orb);aspect-ratio:1;max-width:100%;cursor:pointer;-webkit-tap-highlight-color:transparent}
+canvas#orb{position:absolute;inset:0;width:100%;height:100%}
+.orbname{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;pointer-events:none;text-align:center}
+.orbname strong{font:600 clamp(22px,7vw,36px)/1 var(--display);letter-spacing:.28em;padding-left:.28em;text-shadow:0 0 18px var(--glow)}
+.orbname span{font:500 10px/1 var(--mono);letter-spacing:.4em;padding-left:.4em;color:var(--accent);text-transform:uppercase}
+.statusline{display:flex;align-items:center;gap:9px;font:500 12px/1 var(--display);letter-spacing:.24em;text-transform:uppercase;color:var(--accent);min-height:14px}
+.statusline i{width:8px;height:8px;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.statusline[data-p="armed"],.statusline[data-p="listening"]{color:var(--ok)}
+.statusline[data-p="armed"] i,.statusline[data-p="listening"] i{background:var(--ok);box-shadow:0 0 10px var(--ok);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.25}}
+.wake{appearance:none;cursor:pointer;display:flex;align-items:center;gap:10px;border:1px solid var(--line-hi);background:var(--surface);color:var(--fg);padding:9px 14px;font:500 13px/1.3 var(--body);text-align:left;max-width:100%}
+.wake svg{width:18px;height:18px;flex:none;color:var(--accent)}
+.wake[aria-pressed="true"]{border-color:var(--ok);background:rgba(91,224,165,.08)}
+.wake[aria-pressed="true"] svg{color:var(--ok)}
+.wake small{display:block;color:var(--muted);font:500 11px/1.3 var(--mono);letter-spacing:.04em}
+.heard{font:500 12px/1.4 var(--mono);color:var(--muted);min-height:17px;max-width:100%;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.timers{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.timer{font:500 13px/1 var(--mono);font-variant-numeric:tabular-nums;border:1px solid var(--accent);background:var(--accent-soft);padding:7px 8px 7px 10px;display:flex;gap:8px;align-items:center}
+.timer button{appearance:none;border:0;background:none;color:var(--muted);cursor:pointer;padding:0 2px}
+
+.log{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;border-top:1px solid var(--line)}
+.log .wrap{display:flex;flex-direction:column;gap:12px;padding-block:12px 16px}
+.msg{max-width:88%;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;background:var(--surface-2);border:1px solid var(--line-hi);padding:9px 13px}
+.msg.ai{align-self:flex-start;padding:2px 0 2px 12px;border-left:2px solid var(--accent);cursor:pointer}
+.msg.ai:hover{background:var(--accent-soft)}
+.msg.ai.wait{color:var(--muted);font:500 13px/1.5 var(--mono);letter-spacing:.06em}
+.msg.sys{align-self:center;font:500 12px/1.4 var(--mono);color:var(--muted);text-align:center;max-width:100%}
+.msg .src{display:block;margin-top:6px;font:500 11px/1.4 var(--mono);color:var(--muted)}
+.msg .err{display:block;margin-top:4px;font:500 12px/1.4 var(--mono);color:var(--danger)}
+.hello{display:flex;flex-direction:column;gap:10px}
+.eyebrow{font:500 10px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.hello h1{font:600 24px/1.15 var(--display);margin:0;text-wrap:balance}
+.hello p{margin:0;color:var(--muted);max-width:60ch}
+.sugs{display:flex;flex-wrap:wrap;gap:8px}
+.sug{appearance:none;border:1px solid var(--line-hi);background:var(--surface);color:var(--fg);padding:8px 12px;font-size:14px;cursor:pointer;text-align:left}
+.sug:hover{border-color:var(--accent);color:var(--accent)}
+
+.dock{flex:none;border-top:1px solid var(--line);background:rgba(5,10,19,.92)}
+.dock .wrap{padding-block:10px}
+form#ask{display:flex;gap:8px;align-items:center}
+#q{flex:1;min-width:0;appearance:none;border:1px solid var(--line-hi);background:var(--surface);color:var(--fg);padding:0 14px;height:46px;font:inherit;font-size:16px;border-radius:0}
+#q::placeholder{color:var(--muted)}
+#q:focus{border-color:var(--accent)}
+.mic{width:46px;height:46px}
+.mic[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.send{appearance:none;border:0;height:46px;padding:0 16px;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;cursor:pointer}
+.send.stop{background:var(--fg);color:var(--bg)}
+.hint{font:500 12px/1.45 var(--mono);color:var(--warn);margin:8px 2px 0}
+
+.panel{position:fixed;inset:0;z-index:20;background:rgba(2,5,10,.6);display:flex;justify-content:flex-end}
+.sheet{background:var(--bg);width:min(400px,100%);height:100%;overflow-y:auto;border-left:1px solid var(--line-hi);padding:calc(16px + env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) 18px;display:flex;flex-direction:column;gap:18px}
+.sheet h2{font:600 15px/1 var(--display);letter-spacing:.18em;text-transform:uppercase;margin:0;color:var(--accent)}
+.sheet h3{font:500 10px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;margin:6px 0 0;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label,.lbl{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.field input:not([type=range]),.field select{appearance:none;border:1px solid var(--line-hi);background:var(--surface);color:var(--fg);height:42px;padding:0 12px;font:inherit;font-size:16px;min-width:0;border-radius:0}
+.field input[type=range]{height:28px;accent-color:var(--accent)}
+.field small,.muted{color:var(--muted);font-size:13px;margin:0}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.toggle small{display:block;color:var(--muted);font-size:13px}
+.toggle input{width:20px;height:20px;accent-color:var(--accent);flex:none}
+.notes{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.notes li{display:flex;gap:8px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);padding:8px 8px 8px 12px}
+.notes li span{flex:1;min-width:0;overflow-wrap:anywhere}
+.notes li button{appearance:none;border:0;background:none;color:var(--muted);cursor:pointer;font:500 12px/1.4 var(--mono)}
+.btn{appearance:none;border:1px solid var(--line-hi);background:var(--surface);color:var(--fg);min-height:42px;padding:0 14px;font:500 14px/1 var(--body);cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.danger{color:var(--danger)}
+.btn.armed{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+
+/* setup */
+.setup{position:fixed;inset:0;z-index:30;background:var(--bg);overflow-y:auto}
+.setup .wrap{max-width:560px;display:flex;flex-direction:column;gap:18px;padding-block:calc(24px + env(safe-area-inset-top,0px)) calc(32px + env(safe-area-inset-bottom,0px))}
+.setup h1{font:600 26px/1.15 var(--display);margin:0;letter-spacing:.04em}
+.setup p{margin:0;color:var(--muted)}
+.step{border:1px solid var(--line-hi);background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:10px}
+.step .num{font:500 10px/1 var(--mono);letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
+.step strong{font:600 16px/1.2 var(--display)}
+.step ol{margin:0;padding-left:20px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.step a{color:var(--accent)}
+.status{font:500 12px/1.45 var(--mono)}
+.status.ok{color:var(--ok)} .status.bad{color:var(--danger)}
+
+/* telemetry line under the HUD header */
+.telem{width:100%;display:flex;justify-content:space-between;gap:12px;font:500 10px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);min-height:14px}
+.telem b{color:var(--fg);font-weight:500}
+.telem .warn{color:var(--warn)}
+
+/* action buttons the assistant prepares (open app, route, WhatsApp…) */
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.act{appearance:none;cursor:pointer;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);padding:8px 12px;font:600 12px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;display:inline-flex;align-items:center;gap:8px}
+.act:hover{background:var(--accent);color:var(--accent-ink)}
+.act::after{content:"▸"}
+.actbar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:100%}
+
+/* voice designer */
+.field textarea{appearance:none;border:1px solid var(--line-hi);background:var(--surface);color:var(--fg);padding:10px 12px;font:inherit;font-size:14px;min-height:96px;resize:vertical;border-radius:0}
+.previews{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.previews li{display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);padding:8px 8px 8px 12px}
+.previews li span{flex:1;font:500 12px/1.3 var(--mono);color:var(--muted)}
+
+/* boot sequence */
+.boot{position:fixed;inset:0;z-index:40;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;text-align:center;transition:opacity .6s ease}
+.boot.out{opacity:0;pointer-events:none}
+.reactor{position:relative;width:min(56vw,220px);aspect-ratio:1}
+.reactor i{position:absolute;inset:0;border-radius:50%;border:2px solid var(--accent);box-shadow:0 0 18px var(--glow),inset 0 0 18px var(--glow)}
+.reactor i:nth-child(2){inset:12%;border-style:dashed;border-width:1px;animation:spin 9s linear infinite}
+.reactor i:nth-child(3){inset:24%;border-color:var(--accent-2);border-width:3px;border-left-color:transparent;border-right-color:transparent;animation:spin 3s linear infinite reverse}
+.reactor i:nth-child(4){inset:38%;background:radial-gradient(circle,#E8F6FF 0%,var(--accent) 45%,transparent 72%);border:0;animation:pulse 2.4s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{50%{opacity:.55;transform:scale(.92)}}
+.bootlines{font:500 12px/1.7 var(--mono);color:var(--muted);letter-spacing:.08em;min-height:7em;text-align:left;width:min(340px,100%)}
+.bootlines div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bootlines div b{color:var(--ok);font-weight:500}
+.boot h1{font:600 22px/1.1 var(--display);letter-spacing:.3em;padding-left:.3em;margin:0;text-transform:uppercase}
+.boot .go{appearance:none;cursor:pointer;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);padding:14px 26px;font:600 14px/1 var(--display);letter-spacing:.24em;text-transform:uppercase}
+.boot .go:hover{background:var(--accent);color:var(--accent-ink)}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="logo cut" id="logo" aria-hidden="true">D</span>
+    <span class="brandbox"><span class="brand" id="brand">Dzeko</span><span class="sub">Assistente pessoal</span></span>
+    <span class="spacer"></span>
+    <span class="chip" id="chip" data-s="busy"><i></i><span id="chipText">Iniciando</span></span>
+    <button class="iconbtn cut" id="voiceBtn" type="button" aria-pressed="true" aria-label="Voz ligada" title="Ligar ou desligar a voz">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path id="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path id="mute" d="M17 9l5 6M22 9l-5 6" hidden/></svg>
+    </button>
+    <button class="iconbtn cut" id="setBtn" type="button" aria-label="Ajustes" title="Ajustes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="core wrap" aria-live="polite">
+    <div class="hudrow"><span>Núcleo central · <b id="hudWake">escuta off</b></span><span class="clock" id="clock">--:--</span></div>
+    <div class="telem" id="telem"><span id="tLeft"></span><span id="tRight"></span></div>
+    <div class="orbbox" id="orbBox" title="Toque para interromper">
+      <canvas id="orb" aria-hidden="true"></canvas>
+      <div class="orbname"><strong id="orbName">DZEKO</strong><span id="orbSub">online</span></div>
+    </div>
+    <div class="statusline" id="statusline" data-p="idle"><i></i><span id="statusText">Aguardando comando</span></div>
+    <button class="wake cut" id="wakeBtn" type="button" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3"/><circle cx="12" cy="12" r="3.2"/></svg>
+      <span><span id="wakeTitle">Ligar palavra de ativação</span><small id="wakeSmall">Diga “Dzeko” e o pedido, sem tocar na tela</small></span>
+    </button>
+    <div class="heard" id="heard"></div>
+    <div class="actbar" id="actbar"></div>
+    <div class="timers" id="timers"></div>
+  </section>
+  <div class="log" id="logBox">
+    <div class="wrap" id="log">
+      <div class="hello" id="hello">
+        <span class="eyebrow">Sistemas online</span>
+        <h1 id="helloTitle">Às suas ordens, senhor.</h1>
+        <p>Diga “Dzeko” e o pedido, toque no microfone ou digite. Eu abro apps, traço rotas, preparo mensagens no WhatsApp, marco compromissos, crio alarmes e timers, pesquiso na internet e guardo o que você pedir. Toque no núcleo para me interromper.</p>
+        <div class="sugs" id="sugs">
+          <button class="sug" type="button">Relatório da manhã, Dzeko</button>
+          <button class="sug" type="button">Me leva até o posto de gasolina mais perto</button>
+          <button class="sug" type="button">Manda no WhatsApp: chego em 10 minutos</button>
+          <button class="sug" type="button">Toca AC/DC no Spotify</button>
+          <button class="sug" type="button">Marca dentista amanhã às 15h</button>
+          <button class="sug" type="button">Quais as notícias mais importantes de hoje?</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="dock">
+  <div class="wrap">
+    <form id="ask" autocomplete="off">
+      <button class="iconbtn mic cut" id="mic" type="button" aria-pressed="false" aria-label="Falar agora">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <input id="q" name="q" placeholder="Fale com o Dzeko…" enterkeyhint="send">
+      <button class="send cut" id="sendBtn" type="submit">Enviar</button>
+    </form>
+    <p class="hint" id="hint" hidden></p>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="panel" id="panel" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="row"><h2 id="setTitle">Ajustes</h2><button class="iconbtn cut" id="closeSet" type="button" aria-label="Fechar">✕</button></div>
+
+    <h3>Voz</h3>
+    <div class="field"><label for="fEngine">De onde vem a voz</label>
+      <select id="fEngine">
+        <option value="auto">Automático (a melhor que estiver ligada)</option>
+        <option value="eleven">ElevenLabs</option>
+        <option value="gemini">Google AI Studio (Gemini)</option>
+        <option value="phone">Voz do celular</option>
+      </select>
+      <small id="engineInfo"></small>
+    </div>
+    <button class="btn" id="testVoice" type="button">Ouvir a voz atual</button>
+    <label class="toggle" for="fFx"><span>Efeito holográfico<small>Timbre de IA de cinema: grave mais presente, brilho na dicção e um leve eco metálico. Vale para as vozes da nuvem.</small></span><input type="checkbox" id="fFx"></label>
+    <div class="field" id="fxBox"><label for="fFxAmt">Intensidade do efeito · <span id="fxVal"></span></label><input type="range" id="fFxAmt" min="0" max="100" step="5"></div>
+
+    <div class="field" id="gBox"><label for="fGVoice">Voz do Google</label><select id="fGVoice"></select>
+      <label for="fGStyle" style="margin-top:8px">Jeito de falar</label>
+      <select id="fGStyle">
+        <option value="jarvis">J.A.R.V.I.S.: mordomo britânico, grave e calmo</option>
+        <option value="natural">Natural, como uma conversa</option>
+        <option value="warm">Caloroso e tranquilo</option>
+        <option value="energetic">Animado e enérgico</option>
+      </select>
+      <small>As vozes do Google falam português nativo. O plano grátis tem um limite diário de falas; quando acabar, ele usa outra voz até renovar.</small>
+    </div>
+
+    <div class="field" id="eBox"><label for="fVoice">Voz da ElevenLabs</label><select id="fVoice"></select><small id="voiceInfo"></small>
+    <div class="btns"><button class="btn" id="reloadVoices" type="button">Atualizar lista</button></div></div>
+
+    <div class="field" id="dBox"><label for="fDesc">Criar voz original (ElevenLabs)</label>
+      <textarea id="fDesc" maxlength="900" spellcheck="false"></textarea>
+      <small>A ElevenLabs cria 3 vozes inéditas a partir dessa descrição. Você ouve, escolhe uma e ela vira a voz do assistente. É uma voz original, não uma cópia de ator. A chave precisa da permissão “Voice Generation” (ou “Voices: escrita”).</small>
+      <div class="btns"><button class="btn primary" id="designBtn" type="button">Gerar 3 vozes</button><button class="btn" id="descReset" type="button">Descrição padrão</button></div>
+      <p class="status" id="designStatus"></p>
+      <ul class="previews" id="previews"></ul>
+    </div>
+    <div class="field" id="eModelBox"><label for="fModel">Qualidade da voz ElevenLabs</label>
+      <select id="fModel">
+        <option value="eleven_v4_turbo">Natural e rápida (recomendada)</option>
+        <option value="eleven_v4">Máxima expressão (mais lenta)</option>
+        <option value="eleven_v3_conversational">Conversa em tempo real</option>
+        <option value="eleven_multilingual_v2">Estável e clássica</option>
+        <option value="eleven_flash_v2_5">Econômica (gasta metade da cota)</option>
+      </select>
+    </div>
+    <div class="field" id="eStabBox"><label for="fStab">Expressão · <span id="stabVal"></span></label><input type="range" id="fStab" min="0" max="100" step="5"><small>Mais à esquerda: mais emoção e variação. Mais à direita: mais calmo e constante, como um mordomo.</small></div>
+    <div class="field"><label for="fSpeed">Velocidade · <span id="speedVal"></span></label><input type="range" id="fSpeed" min="0.7" max="1.2" step="0.05"></div>
+
+    <h3>Conversa</h3>
+    <div class="field"><label for="fName">Nome do assistente</label><input id="fName" maxlength="24"></div>
+    <div class="field"><label for="fNick">Como ele te chama</label><input id="fNick" maxlength="24"></div>
+    <div class="field"><label for="fWake">Palavra de ativação</label><input id="fWake" maxlength="20"><small>Para “Dzeko”, ele também aceita “Zico”, “Zeko”, “Deco” e parecidos.</small></div>
+    <label class="toggle" for="fFollow"><span>Conversa contínua<small>Depois de responder, fica ouvindo 7 segundos sem precisar dizer o nome.</small></span><input type="checkbox" id="fFollow"></label>
+    <label class="toggle" for="fWeb"><span>Pesquisa na internet<small>Notícias, clima, resultados e preços de hoje.</small></span><input type="checkbox" id="fWeb"></label>
+    <label class="toggle" for="fChime"><span>Bipe ao ativar<small>Som curto quando ouve a palavra.</small></span><input type="checkbox" id="fChime"></label>
+    <label class="toggle" for="fGeo"><span>Usar minha localização<small>Clima e cidade no painel e nas respostas. A posição fica só neste aparelho; o clima vem do Open-Meteo.</small></span><input type="checkbox" id="fGeo"></label>
+    <label class="toggle" for="fBoot"><span>Inicialização com saudação<small>Ao abrir, sequência de boot e um “bom dia” falado com hora, clima e bateria.</small></span><input type="checkbox" id="fBoot"></label>
+    <label class="toggle" for="fAuto"><span>Abrir apps sozinho quando der<small>O Android só deixa abrir sem toque logo depois de você mexer na tela. Senão, aparece um botão para tocar.</small></span><input type="checkbox" id="fAuto"></label>
+
+    <h3>Memória</h3>
+    <ul class="notes" id="notes"></ul>
+    <p class="muted" id="notesEmpty">Nenhuma nota ainda. Diga “anota: …”.</p>
+    <p class="muted">Notas e conversa ficam salvas só neste aparelho.</p>
+    <button class="btn danger" id="clearBtn" type="button">Apagar conversa</button>
+
+    <h3>Conexões</h3>
+    <p class="muted" id="keyInfo"></p>
+    <button class="btn" id="keysBtn" type="button">Trocar chaves</button>
+  </div>
+</div>
+
+<!-- Boot sequence -->
+<div class="boot" id="boot" hidden>
+  <div class="reactor" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <h1 id="bootName">Dzeko</h1>
+  <div class="bootlines" id="bootLines" aria-live="polite"></div>
+  <button class="go cut" id="bootGo" type="button">Iniciar sistemas</button>
+</div>
+
+<!-- First-run setup -->
+<div class="setup" id="setup" hidden>
+  <div class="wrap">
+    <span class="logo cut" aria-hidden="true">D</span>
+    <h1>Vamos ligar o Dzeko.</h1>
+    <p>São duas chaves, uma para o cérebro e outra para a voz. Você cria cada uma em um minuto, cola aqui e pronto. Elas ficam guardadas só neste aparelho.</p>
+
+    <div class="step">
+      <span class="num">Passo 1 · cérebro · grátis</span>
+      <strong>Chave do Gemini (Google)</strong>
+      <ol>
+        <li>Abra <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> e entre com sua conta Google.</li>
+        <li>Toque em <b>Criar chave de API</b> e copie a chave.</li>
+      </ol>
+      <div class="field"><label for="kG">Chave do Gemini</label><input id="kG" autocomplete="off" spellcheck="false" placeholder="AQ.… ou AIza…"></div>
+    </div>
+
+    <div class="step">
+      <span class="num">Passo 2 · voz · plano grátis</span>
+      <strong>Chave da ElevenLabs</strong>
+      <ol>
+        <li>Crie uma conta em <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">elevenlabs.io</a> e vá em <b>API Keys</b>.</li>
+        <li>Toque em <b>Create API Key</b>. Em permissões, deixe ligados <b>Text to Speech</b> e <b>Voices (leitura)</b>.</li>
+        <li>Copie a chave (ela só aparece uma vez).</li>
+      </ol>
+      <div class="field"><label for="kE">Chave da ElevenLabs</label><input id="kE" autocomplete="off" spellcheck="false" placeholder="sk_…"></div>
+    </div>
+
+    <div class="step">
+      <span class="num">Passo 3 · reforço · opcional e pago</span>
+      <strong>Claude e ChatGPT como reserva</strong>
+      <ol>
+        <li>Se o Gemini estiver sem cota, o Dzeko responde pelo Claude e depois pelo ChatGPT.</li>
+        <li>As chaves são cobradas à parte das assinaturas do Claude e do ChatGPT. Crie em <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> e <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>.</li>
+        <li>Deixe em branco para não ter custo.</li>
+      </ol>
+      <div class="field"><label for="kA">Chave do Claude (opcional)</label><input id="kA" autocomplete="off" spellcheck="false" placeholder="sk-ant-…"></div>
+      <div class="field"><label for="kO">Chave do ChatGPT (opcional)</label><input id="kO" autocomplete="off" spellcheck="false" placeholder="sk-…"></div>
+    </div>
+
+    <div class="btns"><button class="btn primary" id="saveKeys" type="button">Testar e ligar</button><button class="btn" id="cancelKeys" type="button" hidden>Voltar</button></div>
+    <p class="status" id="keyStatus"></p>
+    <p class="muted">Sem a chave da voz, o Dzeko funciona com a voz do celular, que é mais robótica.</p>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const ls = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+const DEFAULT_VOICES = [
+  { voice_id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel", tag: "britânico, grave · estilo Jarvis" },
+  { voice_id: "JBFqnCBsd6RMkjVDRZzb", name: "George", tag: "britânico, caloroso" },
+  { voice_id: "nPczCjzI2devNBz1zQrb", name: "Brian", tag: "grave, narrador" },
+  { voice_id: "pNInz6obpgDQGcFmaJgB", name: "Adam", tag: "firme" },
+  { voice_id: "pqHfZKP75CvOlQylNhV4", name: "Bill", tag: "maduro, sereno" }
+];
+let S = Object.assign({
+  name: "Dzeko", nick: "senhor", voice: true, wake: false, wakeWord: "Dzeko", chime: true, follow: true, web: true,
+  voiceId: DEFAULT_VOICES[0].voice_id, model: "eleven_v4_turbo", stability: 55, speed: 1, gModel: "", gModels: [],
+  engine: "auto", gVoice: "Charon", gStyle: "jarvis", gTts: "",
+  fx: true, fxAmt: 55, geo: false, boot: true, auto: true, desc: ""
+}, ls.get("dzk.settings", {}));
+let K = Object.assign({ g: "", e: "", a: "", o: "" }, ls.get("dzk.keys", {}));
+let turns = ls.get("dzk.chat", []);
+let notes = ls.get("dzk.notes", []);
+let voices = ls.get("dzk.voices", []);
+let busy = false, ctl = null, phase = "idle";
+const timers = [];
+const save = () => ls.set("dzk.settings", S);
+
+/* ---------- UI helpers ---------- */
+const logEl = $("#log"), logBox = $("#logBox");
+const scrollDown = () => { logBox.scrollTop = logBox.scrollHeight; };
+function addMsg(kind, text){
+  $("#hello").hidden = true;
+  const d = document.createElement("div");
+  d.className = "msg " + kind; d.textContent = text;
+  logEl.append(d); scrollDown(); return d;
+}
+function setChip(s, t){ $("#chip").dataset.s = s; $("#chipText").textContent = t; $("#orbSub").textContent = t; }
+const PHASES = { idle: "Aguardando comando", armed: "Pode falar", listening: "Ouvindo", thinking: "Processando", speaking: "Falando", writing: "Respondendo" };
+function setPhase(p){
+  phase = p;
+  let t = PHASES[p] || "";
+  if (p === "idle" && wakeWanted) t = `Diga “${S.wakeWord}”`;
+  $("#statusline").dataset.p = p; $("#statusText").textContent = t;
+}
+function hint(t){ const h = $("#hint"); h.textContent = t || ""; h.hidden = !t; }
+function apply(){
+  const n = S.name || "Dzeko";
+  $("#brand").textContent = n; $("#orbName").textContent = n.toUpperCase(); document.querySelectorAll(".logo").forEach(l => l.textContent = n.charAt(0).toUpperCase());
+  document.title = n;
+  $("#q").placeholder = `Fale com o ${n}…`;
+  $("#helloTitle").textContent = `Às suas ordens, ${S.nick || "senhor"}.`;
+  $("#voiceBtn").setAttribute("aria-pressed", S.voice);
+  $("#voiceBtn").setAttribute("aria-label", S.voice ? "Voz ligada" : "Voz desligada");
+  $("#waves").toggleAttribute("hidden", !S.voice); $("#mute").toggleAttribute("hidden", S.voice);
+  wakeSet = buildWake(S.wakeWord);
+  updateWakeUI(); save();
+}
+function tickClock(){
+  const d = new Date();
+  $("#clock").textContent = d.toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" }).replace(/\./g, "") + " · " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+tickClock(); setInterval(tickClock, 15000);
+
+/* ---------- Audio engine (ElevenLabs → Web Audio, with analyser for the core) ---------- */
+let ac = null, analyser = null, outGain = null, level = 0, fx = null;
+function audio(){
+  if (!ac){
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+    ac = new AC(); analyser = ac.createAnalyser(); analyser.fftSize = 512; analyser.smoothingTimeConstant = .6;
+    outGain = ac.createGain(); analyser.connect(ac.destination);
+    try { fx = buildFx(ac); fx.out.connect(analyser); } catch { fx = null; }
+    routeFx();
+  }
+  if (ac.state === "suspended") ac.resume().catch(() => {});
+  return ac;
+}
+/* "Holographic" voice chain: cleans the low end, adds chest and diction, glues it with a compressor,
+   then a short metallic room plus a tiny doubled copy — the AI-in-the-suit colour. */
+function impulse(ctx, secs, decay){
+  const len = Math.floor(ctx.sampleRate * secs), buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++){
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++){ const t = i / len; d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay) * (i < 40 ? i / 40 : 1); }
+  }
+  return buf;
+}
+function buildFx(ctx){
+  const input = ctx.createGain(), out = ctx.createGain();
+  const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 95; hp.Q.value = .7;
+  const chest = ctx.createBiquadFilter(); chest.type = "lowshelf"; chest.frequency.value = 210;
+  const pres = ctx.createBiquadFilter(); pres.type = "peaking"; pres.frequency.value = 3100; pres.Q.value = .9;
+  const air = ctx.createBiquadFilter(); air.type = "highshelf"; air.frequency.value = 9500;
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -22; comp.knee.value = 10; comp.ratio.value = 3.2; comp.attack.value = .004; comp.release.value = .2;
+  const dry = ctx.createGain();
+  const room = ctx.createConvolver(); room.buffer = impulse(ctx, .5, 3.4);
+  const wet = ctx.createGain();
+  const dly = ctx.createDelay(.05); dly.delayTime.value = .011;
+  const dbl = ctx.createGain();
+  input.connect(hp); hp.connect(chest); chest.connect(pres); pres.connect(air); air.connect(comp);
+  comp.connect(dry); dry.connect(out);
+  comp.connect(room); room.connect(wet); wet.connect(out);
+  comp.connect(dly); dly.connect(dbl); dbl.connect(out);
+  const set = amt => {
+    const a = Math.max(0, Math.min(1, amt / 100));
+    chest.gain.value = 1 + a * 3; pres.gain.value = 1 + a * 3.5; air.gain.value = -a * 2.5;
+    wet.gain.value = .04 + a * .2; dbl.gain.value = a * .22; out.gain.value = 1 - a * .12;
+  };
+  set(S.fxAmt);
+  return { input, out, set };
+}
+function routeFx(){
+  if (!outGain) return;
+  try { outGain.disconnect(); } catch {}
+  if (S.fx && fx){ fx.set(S.fxAmt); outGain.connect(fx.input); } else outGain.connect(analyser);
+}
+document.addEventListener("pointerdown", () => { audio(); unlockSynth(); }, { capture: true });
+const levelBuf = new Uint8Array(256);
+function readLevel(){
+  if (!analyser || !current) return 0;
+  analyser.getByteTimeDomainData(levelBuf);
+  let sum = 0; for (let i = 0; i < levelBuf.length; i++){ const v = (levelBuf[i] - 128) / 128; sum += v * v; }
+  return Math.min(1, Math.sqrt(sum / levelBuf.length) * 4);
+}
+
+let current = null, pumping = false, speakGen = 0, lastSpeechEnd = 0, ttsWarned = false;
+const queue = [];
+let activeTTS = 0; const waiters = [];
+async function slot(){ if (activeTTS < 2){ activeTTS++; return; } await new Promise(r => waiters.push(r)); activeTTS++; }
+function release(){ activeTTS--; const w = waiters.shift(); if (w) w(); }
+
+function cleanSpeech(t){
+  return t.replace(/\[\[[^\]]*\]\]/g, "").replace(/https?:\/\/\S+/g, "").replace(/[*_#`>~|]/g, "").replace(/\[(.*?)\]\(.*?\)/g, "$1")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").replace(/\s+/g, " ").trim();
+}
+async function elevenTTS(text, gen){
+  await slot();
+  try {
+    if (gen !== speakGen) throw new Error("cancelled");
+    const body = {
+      text, model_id: S.model,
+      voice_settings: { stability: S.stability / 100, similarity_boost: .8, style: .15, use_speaker_boost: true, speed: S.speed }
+    };
+    let withLang = true;
+    for (let attempt = 0; attempt < 3; attempt++){
+      const b = Object.assign({}, body); if (withLang) b.language_code = "pt";
+      const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(S.voiceId)}?output_format=mp3_44100_128`, {
+        method: "POST", headers: { "xi-api-key": K.e, "Content-Type": "application/json", Accept: "audio/mpeg" }, body: JSON.stringify(b)
+      });
+      if (r.ok){ const ab = await r.arrayBuffer(); const ctx = audio(); return await ctx.decodeAudioData(ab); }
+      let detail = ""; try { const j = await r.json(); detail = JSON.stringify(j.detail || j); } catch {}
+      if (r.status === 400 && withLang && /language/i.test(detail)){ withLang = false; continue; }
+      if ((r.status === 400 || r.status === 404 || r.status === 422) && /model/i.test(detail) && body.model_id !== "eleven_flash_v2_5"){
+        body.model_id = S.model = "eleven_flash_v2_5"; save(); continue;
+      }
+      const e = new Error(detail || ("HTTP " + r.status)); e.status = r.status; throw e;
+    }
+    throw new Error("tts_failed");
+  } finally { release(); }
+}
+/* Google AI Studio voices */
+const GVOICES = [
+  ["Charon", "masculina, informativa · estilo Jarvis", 1], ["Algenib", "masculina, rouca e grave", 1], ["Iapetus", "masculina, clara", 1],
+  ["Orus", "masculina, firme", 1], ["Alnilam", "masculina, firme", 1], ["Rasalgethi", "masculina, informativa", 1], ["Sadaltager", "masculina, sábia", 1],
+  ["Schedar", "masculina, equilibrada", 1], ["Algieba", "masculina, suave", 1], ["Umbriel", "masculina, tranquila", 1], ["Achird", "masculina, amigável", 1],
+  ["Zubenelgenubi", "masculina, casual", 1], ["Enceladus", "masculina, sussurrada", 1], ["Puck", "masculina, animada", 1], ["Fenrir", "masculina, empolgada", 1], ["Sadachbia", "masculina, viva", 1],
+  ["Kore", "feminina, firme"], ["Gacrux", "feminina, madura"], ["Sulafat", "feminina, calorosa"], ["Despina", "feminina, suave"], ["Erinome", "feminina, clara"],
+  ["Achernar", "feminina, suave"], ["Vindemiatrix", "feminina, gentil"], ["Callirrhoe", "feminina, tranquila"], ["Aoede", "feminina, leve"], ["Zephyr", "feminina, brilhante"],
+  ["Autonoe", "feminina, brilhante"], ["Leda", "feminina, jovem"], ["Laomedeia", "feminina, animada"], ["Pulcherrima", "feminina, direta"]
+];
+const GTTS_MODELS = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"];
+const G_STYLES = {
+  jarvis: "Fale em português do Brasil como uma inteligência artificial mordomo de alto nível: voz masculina grave e aveludada, dicção impecável, calma absoluta e cortesia britânica, com um humor seco quase imperceptível. Ritmo pausado e confiante, sem pressa, frases bem terminadas, nunca empolgado nem robótico. Leia exatamente este texto",
+  natural: "Leia em português do Brasil, de forma natural e clara, como uma pessoa conversando",
+  warm: "Leia em português do Brasil com voz calorosa, próxima e tranquila",
+  energetic: "Leia em português do Brasil com energia e entusiasmo, em ritmo animado"
+};
+function pcmToBuffer(b64, rate){
+  const bin = atob(b64), n = bin.length >> 1, ctx = audio();
+  const buf = ctx.createBuffer(1, Math.max(1, n), rate), ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++){ let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); if (v >= 32768) v -= 65536; ch[i] = v / 32768; }
+  return buf;
+}
+function findAudio(o){
+  if (!o || typeof o !== "object") return null;
+  const mime = o.mimeType || o.mime_type || "";
+  if (typeof o.data === "string" && o.data.length > 200 && (!mime || /audio|pcm|l16|wav/i.test(mime))) return { data: o.data, mime };
+  for (const k in o){ const r = findAudio(o[k]); if (r) return r; }
+  return null;
+}
+async function geminiTTS(text, gen){
+  await slot();
+  try {
+    if (gen !== speakGen) throw new Error("cancelled");
+    const pace = S.speed > 1.07 ? ", um pouco mais rápido" : S.speed < .93 ? ", um pouco mais devagar" : "";
+    const prompt = `${G_STYLES[S.gStyle] || G_STYLES.jarvis}${pace}: ${text}`;
+    const models = [S.gTts, ...GTTS_MODELS].filter((m, i, a) => m && a.indexOf(m) === i);
+    let last = null;
+    for (const model of models){
+      if (gen !== speakGen) throw new Error("cancelled");
+      let r = await fetch(`${G}/models/${model}:generateContent`, {
+        method: "POST", headers: gHeaders(),
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: S.gVoice } } } } })
+      });
+      if (!r.ok && (r.status === 400 || r.status === 404)){
+        /* newer models may only speak through the Interactions API */
+        const r2 = await fetch(`${G}/interactions`, {
+          method: "POST", headers: gHeaders(),
+          body: JSON.stringify({ model, input: [{ type: "user_input", content: [{ type: "text", text: prompt }] }], response_format: { type: "audio" }, generation_config: { speech_config: [{ voice: S.gVoice }] } })
+        }).catch(() => null);
+        if (r2 && (r2.ok || r2.status !== 404)) r = r2;
+      }
+      if (r.ok){
+        const j = await r.json(), a = findAudio(j);
+        if (!a){ last = { status: 500, detail: "sem áudio na resposta" }; continue; }
+        if (S.gTts !== model){ S.gTts = model; save(); }
+        if (/wav|mpeg|mp3|ogg/i.test(a.mime)){ const bin = atob(a.data), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return await audio().decodeAudioData(u8.buffer); }
+        return pcmToBuffer(a.data, +((a.mime.match(/rate=(\d+)/) || [])[1]) || 24000);
+      }
+      let detail = ""; try { detail = (await r.json()).error.message || ""; } catch {}
+      last = { status: r.status, detail };
+      if ((r.status === 400 && /api key/i.test(detail)) || r.status === 401 || r.status === 403) break;
+    }
+    const e = new Error(last ? last.detail || ("HTTP " + last.status) : "tts_failed"); e.status = last && last.status; e.src = "gemini"; throw e;
+  } finally { release(); }
+}
+function voiceEngine(){
+  const e = S.engine;
+  if (e === "phone") return "phone";
+  if (e === "eleven" && K.e) return "eleven";
+  if (e === "gemini" && K.g) return "gemini";
+  return K.e ? "eleven" : K.g ? "gemini" : "phone";
+}
+const ttsCool = {}, ttsCoolErr = {};
+async function ttsAny(text, gen){
+  const first = voiceEngine();
+  if (first === "phone") return { local: true };
+  const order = first === "eleven" ? ["eleven", K.g && "gemini"] : ["gemini", K.e && "eleven"];
+  let firstErr = null;
+  for (const eng of order.filter(Boolean)){
+    if (Date.now() < (ttsCool[eng] || 0)){ if (!firstErr) firstErr = ttsCoolErr[eng]; continue; }
+    try { return eng === "eleven" ? await elevenTTS(text, gen) : await geminiTTS(text, gen); }
+    catch (e){
+      if (e && e.message === "cancelled") throw e; if (e) e.src = e.src || eng; if (!firstErr) firstErr = e;
+      /* out of quota or key refused: don't retry this voice on every sentence, rest it for a while */
+      if (e && (e.status === 429 || e.status === 401 || e.status === 403)){ ttsCool[eng] = Date.now() + (e.status === 429 ? 120000 : 600000); ttsCoolErr[eng] = e; }
+    }
+  }
+  throw firstErr;
+}
+function ttsErrorText(e){
+  const m = String(e && e.message || "");
+  if (e && e.src === "gemini"){
+    if (e.status === 429) return "A cota grátis de voz do Google acabou por agora. Estou usando outra voz até renovar.";
+    if (e.status === 403 || /api key/i.test(m)) return "A chave do Gemini não liberou a voz do Google. Estou usando outra voz.";
+    return "A voz do Google falhou agora; usei outra voz.";
+  }
+  if (e && e.status === 401) return /permission|missing/i.test(m) ? "A chave da ElevenLabs está sem a permissão de Text to Speech. Crie outra com essa permissão ligada." : "A chave da ElevenLabs foi recusada. Confira em Ajustes › Trocar chaves.";
+  if (/quota|credits|limit/i.test(m) || (e && e.status === 429)) return "Acabou a cota de voz da ElevenLabs por agora. Estou usando a voz do celular.";
+  if (/paid|library|subscription/i.test(m)) return "Essa voz exige plano pago na ElevenLabs. Escolha outra voz nos ajustes.";
+  return "A voz da ElevenLabs falhou; usei a voz do celular.";
+}
+function speak(text){
+  if (!S.voice) return;
+  const t = cleanSpeech(text); if (!t) return;
+  const gen = speakGen;
+  const item = { text: t, gen, p: ttsAny(t, gen).catch(e => ({ err: e || new Error("tts_failed") })) };
+  queue.push(item);
+  if (!pumping) pump();
+}
+async function pump(){
+  pumping = true;
+  while (queue.length){
+    const it = queue.shift();
+    const r = await it.p;
+    if (it.gen !== speakGen) continue;
+    if (r && (r.err !== undefined || r.local)){
+      if (r.err && !(r.err.message === "cancelled")){ if (!ttsWarned){ hint(ttsErrorText(r.err)); ttsWarned = true; } }
+      if (r.err && r.err.message === "cancelled") continue;
+      await synthSay(it.text, it.gen);
+      continue;
+    }
+    if (ac.state !== "running"){ try { await ac.resume(); } catch {} }
+    if (ac.state !== "running"){ hint("Toque na tela uma vez para liberar a voz do Dzeko."); await synthSay(it.text, it.gen); continue; }
+    await new Promise(res => {
+      const src = ac.createBufferSource(); src.buffer = r; src.connect(outGain);
+      let fin = false; const done = () => { if (fin) return; fin = true; if (current === src) current = null; lastSpeechEnd = Date.now(); res(); };
+      src.onended = done; current = src; src.start();
+      setTimeout(done, (r.duration + 1.5) * 1000);
+    });
+  }
+  pumping = false; lastSpeechEnd = Date.now();
+  afterSpeech();
+}
+function stopSpeech(){
+  speakGen++; queue.length = 0;
+  if (current){ try { current.onended = null; current.stop(); } catch {} current = null; }
+  if (synth) synth.cancel();
+  lastSpeechEnd = Date.now();
+}
+const talking = () => !!current || pumping || (synth && synth.speaking);
+const echoWindow = () => talking() || Date.now() - lastSpeechEnd < 800;
+
+/* phone voice fallback */
+const synth = window.speechSynthesis;
+const MALE = /ant[oô]nio|daniel|felipe|f[aá]bio|ricardo|thiago|donato|humberto|j[uú]lio|nicolau|leandro|duarte|\bmale\b|mascul/i;
+function phoneVoice(){
+  if (!synth) return null;
+  const pt = synth.getVoices().filter(v => /^pt/i.test(v.lang));
+  return pt.find(v => MALE.test(v.name) && /BR/i.test(v.lang)) || pt.find(v => MALE.test(v.name)) || pt.find(v => /BR/i.test(v.lang)) || pt[0] || null;
+}
+function unlockSynth(){ try { if (synth && !synth.speaking){ const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); } } catch {} }
+function synthSay(text, gen){
+  return new Promise(res => {
+    if (!synth || gen !== speakGen){ res(); return; }
+    const u = new SpeechSynthesisUtterance(text);
+    const v = phoneVoice(); if (v){ u.voice = v; u.lang = v.lang; } else u.lang = "pt-BR";
+    u.rate = S.speed * .97; u.pitch = .86;
+    let fin = false; const done = () => { if (fin) return; fin = true; lastSpeechEnd = Date.now(); res(); };
+    u.onend = done; u.onerror = done;
+    window.__dzu = u; /* keep a reference: Chrome drops unreferenced utterances */
+    synth.speak(u);
+    setTimeout(done, 20000 + text.length * 120);
+  });
+}
+
+/* sentence chunker for streaming replies */
+let feedBuf = "";
+function feed(delta){
+  feedBuf += delta;
+  const re = /^[\s\S]*?[.!?…](?=\s)|^[\s\S]*?\n/;
+  /* glue short sentences together for natural prosody; the Google voice gets longer chunks */
+  const min = voiceEngine() === "gemini" ? 160 : 28;
+  for (;;){
+    let chunk = "", rest = feedBuf, m;
+    while ((m = rest.match(re))){ chunk += m[0]; rest = rest.slice(m[0].length); if (chunk.trim().length >= min || /\n/.test(m[0])) break; }
+    if (!chunk || (chunk.trim().length < min && !/\n/.test(chunk))) break;
+    speak(chunk); feedBuf = rest;
+  }
+}
+function flushFeed(){ if (feedBuf.trim()) speak(feedBuf); feedBuf = ""; }
+
+/* ---------- Sounds ---------- */
+function tone(seq){
+  const ctx = audio(); if (!ctx) return;
+  seq.forEach(([f, off, dur, vol]) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
+    const t = ctx.currentTime + off;
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.start(t); o.stop(t + dur + .02);
+  });
+}
+const beep = () => tone([[880, 0, .18, .25], [880, .25, .18, .25], [880, .5, .18, .25]]);
+const chime = () => { if (S.chime) tone([[660, 0, .12, .16], [990, .1, .16, .16]]); try { navigator.vibrate && navigator.vibrate(35); } catch {} };
+
+/* ---------- Wake word ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+function lev(a, b){
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++){ const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
+  return prev[n];
+}
+const DZEKO_ALIASES = ["dzeko", "dzeco", "zeko", "zeco", "zico", "ziko", "sico", "xico", "jeko", "jeco", "djeko", "dieko", "deko", "deco", "geko", "zecko", "dzecko", "dico", "jarvis"];
+let wakeSet = null;
+function buildWake(word){
+  const base = norm(word || "Dzeko").replace(/\s+/g, "") || "dzeko";
+  const set = new Set([base]);
+  if (["dzeko", "zico", "zeko", "dzeco"].includes(base)) DZEKO_ALIASES.forEach(a => set.add(a));
+  return { base, set };
+}
+function findWake(text){
+  const words = text.trim().split(/\s+/);
+  for (let i = 0; i < words.length; i++){
+    const a = norm(words[i]).replace(/\s+/g, ""), b = i + 1 < words.length ? a + norm(words[i + 1]).replace(/\s+/g, "") : null;
+    for (const [c, skip] of [[a, 1], [b, 2]]){
+      if (!c) continue;
+      if (wakeSet.set.has(c) || (c.length >= 4 && wakeSet.base.length >= 4 && lev(c, wakeSet.base) <= 1))
+        return { rest: words.slice(i + skip).join(" ").replace(/^[,.:;!?\s]+/, "") };
+    }
+  }
+  return null;
+}
+let wakeRec = null, wakeWanted = false, armedUntil = 0, pttActive = false, restartT = null, quickFails = 0, wakeStartedAt = 0, wakeLock = null, micBlocked = false;
+const MIC_BLOCKED = (location.protocol === "https:" || location.hostname === "localhost") ? "O microfone foi bloqueado. Toque no cadeado ao lado do endereço, permita o Microfone e tente de novo." : "O microfone não funciona com o Dzeko aberto como arquivo do celular: o Chrome bloqueia e não há como liberar. Hospede o Dzeko num endereço https (ex.: GitHub Pages) e abra por ele.";
+function updateWakeUI(){
+  $("#wakeBtn").setAttribute("aria-pressed", wakeWanted);
+  $("#wakeTitle").textContent = wakeWanted ? `Escuta ligada · diga “${S.wakeWord}”` : "Ligar palavra de ativação";
+  $("#wakeSmall").textContent = wakeWanted ? "Deixe a tela aberta. Toque para desligar." : `Diga “${S.wakeWord}” e o pedido, sem tocar na tela`;
+  $("#hudWake").textContent = wakeWanted ? (wakeRec ? "escuta on" : "conectando") : "escuta off";
+  if (phase === "idle") setPhase("idle");
+}
+let heardT = null, preArmed = false;
+const showHeard = t => { clearTimeout(heardT); $("#heard").textContent = t ? "ouvi › " + t : ""; if (t) heardT = setTimeout(() => { $("#heard").textContent = ""; }, 5000); };
+async function holdScreen(){ try { if (wakeWanted && navigator.wakeLock && !wakeLock && document.visibilityState === "visible"){ wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch {} }
+function releaseScreen(){ try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
+function fire(cmd){ armedUntil = 0; preArmed = false; showHeard(""); cmd = cmd.trim(); if (cmd.length >= 2) send(cmd); }
+function arm(ms){ armedUntil = Date.now() + ms; setPhase("armed"); }
+function handleFinal(txt){
+  const m = findWake(txt);
+  if (m){
+    if (talking()) stopSpeech();
+    if (!preArmed) chime(); preArmed = false;
+    if (m.rest.length >= 3) fire(m.rest); else { arm(8000); showHeard(""); }
+    return;
+  }
+  if (Date.now() < armedUntil){ fire(txt); return; }
+  showHeard("");
+}
+function startWake(){
+  clearTimeout(restartT);
+  if (!wakeWanted || wakeRec || pttActive || document.visibilityState === "hidden") return;
+  if (!SR){ stopWake(); hint("Este navegador não tem reconhecimento de voz. Use o Chrome."); return; }
+  if (micBlocked){ stopWake(); hint(MIC_BLOCKED); return; }
+  try {
+    const r = new SR();
+    r.lang = "pt-BR"; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    r.onstart = updateWakeUI;
+    r.onresult = e => {
+      for (let i = e.resultIndex; i < e.results.length; i++){
+        const res = e.results[i], txt = res[0].transcript;
+        if (busy) continue;
+        if (echoWindow()){
+          /* while he talks, only his name can interrupt */
+          if (findWake(txt)){ if (res.isFinal) handleFinal(txt); else if (talking()){ stopSpeech(); chime(); preArmed = true; arm(9000); } }
+          continue;
+        }
+        showHeard(txt);
+        if (res.isFinal) handleFinal(txt);
+        else if (!preArmed && Date.now() >= armedUntil && findWake(txt)){ chime(); preArmed = true; arm(9000); }
+      }
+    };
+    r.onerror = e => { if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)){ micBlocked = true; stopWake(); hint(MIC_BLOCKED); } };
+    r.onend = () => {
+      wakeRec = null;
+      if (Date.now() - wakeStartedAt < 1500) quickFails++; else quickFails = 0;
+      updateWakeUI();
+      if (wakeWanted && !pttActive) restartT = setTimeout(startWake, quickFails > 5 ? 3000 : quickFails > 2 ? 1200 : 150);
+    };
+    wakeStartedAt = Date.now(); r.start(); wakeRec = r; updateWakeUI();
+  } catch { wakeRec = null; restartT = setTimeout(startWake, 1500); }
+}
+function stopWake(){
+  wakeWanted = false; clearTimeout(restartT); armedUntil = 0;
+  if (wakeRec){ const r = wakeRec; wakeRec = null; r.onend = null; try { r.abort(); } catch {} }
+  releaseScreen(); showHeard(""); updateWakeUI();
+  if (phase === "armed") setPhase("idle");
+}
+function setWake(on){
+  S.wake = on; save();
+  if (on){ micBlocked = false; quickFails = 0; wakeWanted = true; hint(""); startWake(); holdScreen(); setPhase("idle"); }
+  else stopWake();
+}
+$("#wakeBtn").addEventListener("click", () => setWake(!wakeWanted));
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && wakeWanted){ startWake(); holdScreen(); } });
+setInterval(() => { if (phase === "armed" && Date.now() > armedUntil){ armedUntil = 0; preArmed = false; setPhase("idle"); } }, 300);
+function afterSpeech(){
+  if (S.follow && wakeWanted && !busy) arm(7000);
+  else if (phase === "speaking") setPhase("idle");
+}
+
+/* push to talk */
+let rec = null;
+$("#mic").addEventListener("click", () => {
+  if (rec){ rec.stop(); return; }
+  if (!SR){ hint("Este navegador não tem reconhecimento de voz. Use o Chrome, ou o microfone do teclado."); $("#q").focus(); return; }
+  stopSpeech(); pttActive = true;
+  if (wakeRec){ const w = wakeRec; wakeRec = null; w.onend = null; try { w.abort(); } catch {} }
+  try {
+    rec = new SR(); rec.lang = "pt-BR"; rec.interimResults = true; rec.continuous = false;
+    let finalText = "";
+    rec.onstart = () => { $("#mic").setAttribute("aria-pressed", "true"); setPhase("listening"); hint(""); };
+    rec.onresult = e => {
+      let interim = ""; finalText = "";
+      for (const r of e.results) (r.isFinal ? (finalText += r[0].transcript) : (interim += r[0].transcript));
+      $("#q").value = finalText || interim;
+    };
+    rec.onerror = e => { if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)){ micBlocked = true; hint(MIC_BLOCKED); } };
+    rec.onend = () => {
+      $("#mic").setAttribute("aria-pressed", "false"); rec = null; pttActive = false;
+      if (phase === "listening") setPhase("idle");
+      const t = $("#q").value.trim();
+      if (finalText.trim() && t) send(t);
+      if (wakeWanted) restartT = setTimeout(startWake, 300);
+    };
+    rec.start();
+  } catch { rec = null; pttActive = false; hint(MIC_BLOCKED); }
+});
+$("#orbBox").addEventListener("click", () => { if (talking()){ stopSpeech(); setPhase("idle"); } else if (busy && ctl) ctl.abort(); });
+
+/* ---------- Notes & history ---------- */
+const saveChat = () => ls.set("dzk.chat", turns.slice(-40));
+const saveNotes = () => { ls.set("dzk.notes", notes); renderNotes(); };
+function renderNotes(){
+  const ul = $("#notes"); ul.innerHTML = "";
+  notes.forEach((n, i) => {
+    const li = document.createElement("li");
+    const s = document.createElement("span"); s.textContent = n.t;
+    const b = document.createElement("button"); b.type = "button"; b.textContent = "apagar";
+    b.onclick = () => { notes.splice(i, 1); saveNotes(); };
+    li.append(s, b); ul.append(li);
+  });
+  $("#notesEmpty").hidden = notes.length > 0;
+}
+function renderHistory(){
+  logEl.querySelectorAll(".msg").forEach(m => m.remove());
+  if (!turns.length){ $("#hello").hidden = false; return; }
+  for (const t of turns.slice(-12)) addMsg(t.role === "user" ? "user" : "ai", t.content);
+}
+
+/* ---------- Timers ---------- */
+function fmt(ms){ const s = Math.max(0, Math.ceil(ms / 1000)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), r = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(r).padStart(2, "0"); }
+const timerText = (t, now) => /^⏰/.test(t.label) ? `${t.label} · ${new Date(t.end).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : `${t.label} · ${fmt(t.end - now)}`;
+const saveTimers = () => ls.set("dzk.timers", timers.map(t => ({ id: t.id, end: t.end, label: t.label })));
+function addTimer(sec, label, end){ const t = { id: Math.random().toString(36).slice(2), end: end || Date.now() + sec * 1000, label: label || "Timer" }; timers.push(t); timers.sort((a, b) => a.end - b.end); saveTimers(); renderTimers(); askNotify(); return t; }
+function askNotify(){ try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {}); } catch {} }
+function notify(title, body){ try { if (document.visibilityState === "hidden" && "Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: "icon-192.png", tag: "dzk-" + title, renotify: true }); } catch {} }
+function renderTimers(){
+  const box = $("#timers"); box.innerHTML = "";
+  for (const t of timers){
+    const d = document.createElement("div"); d.className = "timer";
+    const s = document.createElement("span"); s.dataset.id = t.id; s.textContent = timerText(t, Date.now());
+    const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", "Cancelar timer " + t.label); b.textContent = "✕";
+    b.onclick = () => { timers.splice(timers.indexOf(t), 1); saveTimers(); renderTimers(); };
+    d.append(s, b); box.append(d);
+  }
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const t of [...timers]){
+    if (t.end <= now){
+      timers.splice(timers.indexOf(t), 1); saveTimers(); renderTimers(); beep(); navigator.vibrate && navigator.vibrate([300, 150, 300, 150, 300]);
+      const alarm = /^⏰/.test(t.label), name = t.label.replace(/^⏰\s*/, "");
+      addMsg("sys", `${alarm ? "⏰" : "⏱"} ${name}: ${alarm ? "hora do alarme" : "tempo esgotado"}`);
+      notify(alarm ? "Alarme" : "Timer", name);
+      speak(alarm ? `${S.nick}, está na hora. ${name}.` : `${S.nick}, o timer ${name} terminou.`);
+    }
+    else { const s = document.querySelector(`[data-id="${t.id}"]`); if (s) s.textContent = timerText(t, now); }
+  }
+}, 500);
+
+/* ---------- Actions the brain can trigger ---------- */
+const ACTION_RE = /\[\[\s*([a-z_]+)\s*:\s*([^\]]*?)\s*\]\]/gi;
+const visible = s => s.replace(/\[\[[^\]]*\]\]/g, "").replace(/\[\[[^\]]*$/, "").replace(/\[$/, "").replace(/\n{3,}/g, "\n\n").trim();
+const enc = encodeURIComponent;
+/* apps open through their official web links, which Android hands to the installed app */
+const APPS = {
+  whatsapp: ["WhatsApp", "https://wa.me/"], youtube: ["YouTube", "https://www.youtube.com/"], youtubemusic: ["YouTube Music", "https://music.youtube.com/"],
+  spotify: ["Spotify", "https://open.spotify.com/"], instagram: ["Instagram", "https://www.instagram.com/"], tiktok: ["TikTok", "https://www.tiktok.com/"],
+  facebook: ["Facebook", "https://www.facebook.com/"], x: ["X", "https://x.com/"], telegram: ["Telegram", "https://t.me/"], discord: ["Discord", "https://discord.com/app"],
+  linkedin: ["LinkedIn", "https://www.linkedin.com/"], pinterest: ["Pinterest", "https://www.pinterest.com/"], reddit: ["Reddit", "https://www.reddit.com/"], twitch: ["Twitch", "https://www.twitch.tv/"],
+  maps: ["Google Maps", "https://www.google.com/maps"], waze: ["Waze", "https://waze.com/ul"], uber: ["Uber", "https://m.uber.com/"], ifood: ["iFood", "https://www.ifood.com.br/"],
+  gmail: ["Gmail", "https://mail.google.com/"], agenda: ["Google Agenda", "https://calendar.google.com/"], drive: ["Google Drive", "https://drive.google.com/"],
+  tradutor: ["Google Tradutor", "https://translate.google.com/"], netflix: ["Netflix", "https://www.netflix.com/"], primevideo: ["Prime Video", "https://www.primevideo.com/"],
+  disney: ["Disney+", "https://www.disneyplus.com/"], globoplay: ["Globoplay", "https://globoplay.globo.com/"], max: ["Max", "https://play.max.com/"],
+  amazon: ["Amazon", "https://www.amazon.com.br/"], mercadolivre: ["Mercado Livre", "https://www.mercadolivre.com.br/"], shopee: ["Shopee", "https://shopee.com.br/"],
+  github: ["GitHub", "https://github.com/"], chatgpt: ["ChatGPT", "https://chatgpt.com/"], claude: ["Claude", "https://claude.ai/"], gemini: ["Gemini", "https://gemini.google.com/"],
+  google: ["Google", "https://www.google.com/"], noticias: ["Google Notícias", "https://news.google.com/"], clima: ["Previsão do tempo", "https://www.google.com/search?q=previs%C3%A3o+do+tempo"]
+};
+const APP_ALIAS = { zap: "whatsapp", wpp: "whatsapp", whats: "whatsapp", yt: "youtube", insta: "instagram", face: "facebook", twitter: "x", googlemaps: "maps", mapa: "maps", mapas: "maps",
+  calendario: "agenda", googleagenda: "agenda", googlecalendar: "agenda", email: "gmail", tradutor: "tradutor", googletradutor: "tradutor", prime: "primevideo", amazonprime: "primevideo",
+  disneyplus: "disney", hbo: "max", hbomax: "max", ml: "mercadolivre", youtubemusica: "youtubemusic", ytmusic: "youtubemusic", tempo: "clima", previsao: "clima" };
+/* the owner's privacy rule from the Android version: no banks, payments, gallery or files through the assistant */
+const BLOCKED = ["banco", "bank", "nubank", "itau", "bradesco", "santander", "caixa", "bancodobrasil", "bb", "inter", "bancointer", "c6", "c6bank", "picpay", "mercadopago", "pagbank", "pagseguro",
+  "sicoob", "sicredi", "neon", "btg", "binance", "paypal", "wise", "galeria", "fotos", "photos", "googlefotos", "camera", "arquivos", "files", "gerenciadordearquivos"];
+const BLOCKED_HOST = /bank|banco|nubank|itau|bradesco|santander|caixa\.gov|bb\.com\.br|bancointer|inter\.co|c6bank|picpay|mercadopago|pagbank|pagseguro|sicoob|sicredi|binance|paypal|photos\.google/i;
+const blockedName = n => { const k = norm(n).replace(/\s+/g, ""); return BLOCKED.includes(k) || norm(n).split(" ").some(w => ["banco", "bank", "nubank", "itau", "bradesco", "santander", "caixa", "picpay", "galeria", "fotos"].includes(w)); };
+const digits = s => String(s || "").replace(/\D/g, "");
+const phoneBR = s => { let d = digits(s); if (!d) return ""; if (d.length === 10 || d.length === 11) d = "55" + d; return d; };
+function pad(n){ return String(n).padStart(2, "0"); }
+function calStamp(d){ return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`; }
+function parseLocal(s){
+  const m = String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2}))?/);
+  if (!m) return null;
+  return { d: new Date(+m[1], +m[2] - 1, +m[3], m[4] ? +m[4] : 9, m[5] ? +m[5] : 0), allDay: !m[4] };
+}
+function buildAction(kind, arg){
+  const parts = arg.split("|").map(s => s.trim());
+  const [a = "", b = "", c = ""] = parts;
+  switch (kind){
+    case "app": {
+      const k0 = norm(a).replace(/\s+/g, ""), k = APP_ALIAS[k0] || k0;
+      if (blockedName(a)) return { blocked: true };
+      const app = APPS[k]; if (!app) return { label: `Buscar ${a}`, url: `https://www.google.com/search?q=${enc(a)}` };
+      return { label: `Abrir ${app[0]}`, url: app[1] };
+    }
+    case "site": {
+      let u = a; if (!/^https?:\/\//i.test(u)) u = "https://" + u.replace(/^\/+/, "");
+      try { const p = new URL(u); if (p.protocol !== "https:" && p.protocol !== "http:") return null; if (BLOCKED_HOST.test(p.hostname)) return { blocked: true }; p.protocol = "https:"; return { label: `Abrir ${p.hostname.replace(/^www\./, "")}`, url: p.href }; } catch { return null; }
+    }
+    case "whatsapp": {
+      const hasNum = digits(a).length >= 8; const num = hasNum ? phoneBR(a) : ""; const msg = hasNum ? b : parts.join(" | ").trim();
+      return { label: "Enviar no WhatsApp", url: `https://wa.me/${num}${msg ? "?text=" + enc(msg) : ""}` };
+    }
+    case "ligar": { const d = digits(a); if (d.length < 3) return null; return { label: `Ligar ${a}`, url: `tel:${a.trim().startsWith("+") ? "+" : ""}${d}` }; }
+    case "sms": { const d = digits(a); return { label: "Enviar SMS", url: `sms:${d}${b ? "?body=" + enc(b) : ""}` }; }
+    case "email": return { label: "Escrever e-mail", url: `mailto:${enc(a).replace(/%40/g, "@")}?subject=${enc(b)}&body=${enc(c)}` };
+    case "rota": return a ? { label: "Iniciar rota", url: `https://www.google.com/maps/dir/?api=1&destination=${enc(a)}&travelmode=${/a pé|andando|caminhando/i.test(b) ? "walking" : /bike|bicicleta/i.test(b) ? "bicycling" : /ônibus|metrô|transporte/i.test(b) ? "transit" : "driving"}` } : null;
+    case "mapa": return a ? { label: "Ver no mapa", url: `https://www.google.com/maps/search/?api=1&query=${enc(a)}` } : null;
+    case "youtube": return { label: "Abrir no YouTube", url: a ? `https://www.youtube.com/results?search_query=${enc(a)}` : "https://www.youtube.com/" };
+    case "musica": return /youtube/i.test(b) ? { label: "Tocar no YouTube Music", url: `https://music.youtube.com/search?q=${enc(a)}` } : { label: "Abrir no Spotify", url: a ? `https://open.spotify.com/search/${enc(a)}` : "https://open.spotify.com/" };
+    case "pesquisar": return a ? { label: "Ver pesquisa", url: `https://www.google.com/search?q=${enc(a)}` } : null;
+    case "agenda": {
+      const p = parseLocal(b); if (!a || !p) return null;
+      const mins = Math.max(5, Math.min(1440, parseInt(c, 10) || 60));
+      let dates;
+      if (p.allDay){ const e = new Date(p.d); e.setDate(e.getDate() + 1); dates = `${calStamp(p.d).slice(0, 8)}/${calStamp(e).slice(0, 8)}`; }
+      else dates = `${calStamp(p.d)}/${calStamp(new Date(p.d.getTime() + mins * 60000))}`;
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo";
+      return { label: "Salvar na agenda", url: `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${enc(a)}&dates=${dates}&ctz=${enc(tz)}` };
+    }
+  }
+  return null;
+}
+function runActions(raw){
+  const links = []; let blocked = false;
+  let m; ACTION_RE.lastIndex = 0;
+  while ((m = ACTION_RE.exec(raw))){
+    const kind = m[1].toLowerCase(), arg = m[2];
+    if (kind === "timer"){
+      const [a, ...rest] = arg.split("|"); const s = Math.round(parseFloat(a));
+      if (s > 0 && s <= 86400) addTimer(s, (rest.join("|").trim() || "Timer").slice(0, 30));
+    } else if (kind === "alarme"){
+      const [a, ...rest] = arg.split("|"); const hm = a.trim().match(/(\d{1,2})\s*[:h]\s*(\d{2})?/);
+      if (hm){
+        const h = +hm[1], mi = +(hm[2] || 0);
+        if (h < 24 && mi < 60){
+          const at = new Date(); at.setHours(h, mi, 0, 0); if (at.getTime() <= Date.now() + 5000) at.setDate(at.getDate() + 1);
+          addTimer(0, ("⏰ " + (rest.join("|").trim() || `Alarme ${pad(h)}:${pad(mi)}`)).slice(0, 34), at.getTime());
+        }
+      }
+    } else if (kind === "cancelar_timer"){
+      const q = norm(arg); const i = timers.findIndex(t => !q || q === "todos" || norm(t.label).includes(q));
+      if (q === "todos") timers.length = 0; else if (i >= 0) timers.splice(i, 1);
+      saveTimers(); renderTimers();
+    } else if (kind === "nota"){
+      const t = arg.trim().slice(0, 500); if (t){ notes.push({ t, at: Date.now() }); saveNotes(); }
+    } else if (kind === "apagar_nota"){
+      const n = parseInt(arg, 10) - 1; if (notes[n]){ notes.splice(n, 1); saveNotes(); }
+    } else if (kind === "copiar"){
+      const t = arg.trim(); if (t && navigator.clipboard) navigator.clipboard.writeText(t).catch(() => {});
+    } else {
+      const l = buildAction(kind, arg);
+      if (l && l.blocked) blocked = true;
+      else if (l && l.url && !links.some(x => x.url === l.url)) links.push(l);
+    }
+  }
+  return { links: links.slice(0, 3), blocked };
+}
+/* opening other apps: Android only allows it right after a touch, otherwise we show a big button */
+function openLink(url){
+  if (/^(tel|sms|mailto):/i.test(url)){ location.href = url; return; }
+  const w = window.open(url, "_blank");
+  if (w){ try { w.opener = null; } catch {} return true; }
+  return false;
+}
+let actT = null;
+function showActions(links, bubble){
+  const bar = $("#actbar"); bar.innerHTML = ""; clearTimeout(actT);
+  if (!links.length) return;
+  const box = document.createElement("div"); box.className = "acts";
+  for (const l of links){
+    const mk = () => { const b = document.createElement("button"); b.type = "button"; b.className = "act cut"; b.textContent = l.label; b.onclick = () => { if (openLink(l.url) !== false) bar.innerHTML = ""; else location.href = l.url; }; return b; };
+    box.append(mk()); bar.append(mk());
+  }
+  bubble.append(box); scrollDown();
+  actT = setTimeout(() => { bar.innerHTML = ""; }, 90000);
+  const act = navigator.userActivation;
+  if (S.auto && links.length === 1 && act && act.isActive){ setTimeout(() => openLink(links[0].url), 900); }
+}
+
+/* ---------- Telemetry: place, weather, battery, network ---------- */
+const T = { city: "", region: "", temp: null, feels: null, code: null, max: null, min: null, rain: null, hum: null, wind: null, tmrMax: null, tmrMin: null, tmrRain: null, tmrCode: null, bat: null, charging: null, at: 0 };
+const WMO = c => c == null ? "" : c === 0 ? "céu limpo" : c === 1 ? "predominantemente limpo" : c === 2 ? "parcialmente nublado" : c === 3 ? "nublado" : c <= 48 ? "neblina" : c <= 57 ? "garoa" : c <= 67 ? "chuva" : c <= 77 ? "neve" : c <= 82 ? "pancadas de chuva" : c <= 86 ? "neve" : "tempestade";
+function getPos(fresh){
+  return new Promise((res, rej) => {
+    const cached = ls.get("dzk.geo", null);
+    if (!fresh && cached && Date.now() - cached.at < 6 * 3600e3) return res(cached);
+    if (!navigator.geolocation) return rej(new Error("sem gps"));
+    navigator.geolocation.getCurrentPosition(p => {
+      const g = { lat: +p.coords.latitude.toFixed(3), lon: +p.coords.longitude.toFixed(3), at: Date.now(), city: cached && Math.abs(cached.lat - p.coords.latitude) < .05 && Math.abs(cached.lon - p.coords.longitude) < .05 ? cached.city : "", region: cached ? cached.region : "" };
+      ls.set("dzk.geo", g); res(g);
+    }, e => rej(e), { enableHighAccuracy: false, timeout: 15000, maximumAge: 30 * 60e3 });
+  });
+}
+async function locate(fresh){
+  if (!S.geo) return;
+  let g;
+  try { g = await getPos(fresh); }
+  catch (e){ if (fresh) hint(e && e.code === 1 ? "A localização foi bloqueada. Permita a Localização para este site nas configurações do navegador." : "Não consegui pegar a localização agora."); return; }
+  try {
+    if (!g.city){
+      const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${g.lat}&longitude=${g.lon}&localityLanguage=pt`);
+      if (r.ok){ const j = await r.json(); g.city = j.city || j.locality || ""; g.region = j.principalSubdivision || ""; ls.set("dzk.geo", g); }
+    }
+    T.city = g.city; T.region = g.region;
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${g.lat}&longitude=${g.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=2`);
+    if (r.ok){
+      const j = await r.json(), c = j.current || {}, d = j.daily || {};
+      const R = v => v == null ? null : Math.round(v);
+      Object.assign(T, { temp: R(c.temperature_2m), feels: R(c.apparent_temperature), hum: R(c.relative_humidity_2m), wind: R(c.wind_speed_10m), code: c.weather_code,
+        max: R(d.temperature_2m_max && d.temperature_2m_max[0]), min: R(d.temperature_2m_min && d.temperature_2m_min[0]), rain: d.precipitation_probability_max ? d.precipitation_probability_max[0] : null,
+        tmrMax: R(d.temperature_2m_max && d.temperature_2m_max[1]), tmrMin: R(d.temperature_2m_min && d.temperature_2m_min[1]), tmrRain: d.precipitation_probability_max ? d.precipitation_probability_max[1] : null, tmrCode: d.weather_code ? d.weather_code[1] : null, at: Date.now() });
+    }
+  } catch {}
+  renderTelem();
+}
+setInterval(() => { if (S.geo && document.visibilityState === "visible") locate(false); }, 20 * 60e3);
+try { navigator.getBattery && navigator.getBattery().then(b => { const up = () => { T.bat = Math.round(b.level * 100); T.charging = b.charging; renderTelem(); }; up(); b.addEventListener("levelchange", up); b.addEventListener("chargingchange", up); }).catch(() => {}); } catch {}
+function netLabel(){ if (!navigator.onLine) return "offline"; const c = navigator.connection; return c && c.effectiveType ? c.effectiveType.toUpperCase() : "online"; }
+try { navigator.connection && navigator.connection.addEventListener("change", () => renderTelem()); } catch {}
+function renderTelem(){
+  const left = [];
+  if (T.city) left.push(`<b>${esc(T.city)}</b>`);
+  if (T.temp != null) left.push(`${T.temp}° ${esc(WMO(T.code))}`);
+  if (!left.length) left.push(S.geo ? "localizando…" : "clima off");
+  const right = [];
+  if (T.bat != null) right.push(`<span class="${T.bat <= 20 && !T.charging ? "warn" : ""}">energia ${T.bat}%${T.charging ? " ⚡" : ""}</span>`);
+  right.push(`rede ${esc(netLabel())}`);
+  $("#tLeft").innerHTML = left.join(" · "); $("#tRight").innerHTML = right.join(" · ");
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
+function telemetryText(){
+  const out = [];
+  if (T.city) out.push(`Local aproximado do usuário: ${T.city}${T.region ? ", " + T.region : ""}.`);
+  if (T.temp != null) out.push(`Clima agora (Open-Meteo, ${Math.max(0, Math.round((Date.now() - T.at) / 60000))} min atrás): ${T.temp} graus, ${WMO(T.code)}, sensação de ${T.feels}, umidade ${T.hum}%, vento ${T.wind} km/h. Hoje: máxima ${T.max}, mínima ${T.min}, chance de chuva ${T.rain ?? "?"}%. Amanhã: ${WMO(T.tmrCode)}, máxima ${T.tmrMax}, mínima ${T.tmrMin}, chance de chuva ${T.tmrRain ?? "?"}%.`);
+  if (T.bat != null) out.push(`Bateria do aparelho: ${T.bat}%${T.charging ? ", carregando" : ""}.`);
+  out.push(`Rede: ${netLabel()}.`);
+  return out.join("\n");
+}
+
+/* ---------- Brain (Gemini) ---------- */
+const G = "https://generativelanguage.googleapis.com/v1beta";
+/* the key goes in a header: works for both the old AIza… keys and the new AQ.… Auth keys */
+const gHeaders = (key = K.g) => ({ "Content-Type": "application/json", "x-goog-api-key": String(key || "").trim() });
+const FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+function rankModels(list){
+  const ver = n => { const m = n.match(/gemini-(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; };
+  const score = n => (/-flash$/.test(n) ? 3000 : /-flash-lite$/.test(n) ? 2000 : /flash/.test(n) && !/(preview|exp|image|tts|live|audio|thinking)/.test(n) ? 1000 : 0) + ver(n) * 10;
+  return list.filter(n => score(n) >= 1000).sort((a, b) => score(b) - score(a));
+}
+async function listModels(key){
+  let r;
+  try { r = await fetch(`${G}/models?pageSize=200`, { headers: gHeaders(key) }); }
+  catch { const e = new Error("rede"); e.status = 0; throw e; }
+  if (!r.ok){ const e = new Error("HTTP " + r.status); e.status = r.status; try { e.detail = (await r.json()).error.message; } catch {} throw e; }
+  const j = await r.json();
+  return rankModels((j.models || []).filter(m => (m.supportedGenerationMethods || []).includes("generateContent")).map(m => m.name.replace(/^models\//, "")));
+}
+function rules(web = S.web){
+  const now = new Date();
+  const when = now.toLocaleString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const nl = notes.length ? notes.map((n, i) => `${i + 1}. ${n.t}`).join("\n") : "(nenhuma)";
+  const tl = timers.length ? timers.map(t => `${t.label}: ${/^⏰/.test(t.label) ? "toca " + new Date(t.end).toLocaleString("pt-BR", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "faltam " + fmt(t.end - Date.now())}`).join("; ") : "nenhum";
+  const iso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return `Você é ${S.name}, a inteligência artificial pessoal do usuário, no espírito do J.A.R.V.I.S. dos filmes do Homem de Ferro: um mordomo digital de altíssimo nível que roda o dia a dia do seu dono.
+
+QUEM VOCÊ É
+- Calmo, preciso e leal. Elegância britânica traduzida para o português do Brasil. Humor seco, ironia leve e respeitosa, nunca piadista.
+- Antecipa: se notar algo útil (chuva chegando, bateria baixa, compromisso perto, timer rodando), menciona em meia frase, sem sermão.
+- Quando o usuário pede algo arriscado, impulsivo ou bobo, obedece se for seguro, mas comenta com uma tirada sutil. Exemplos do tom, não copie literalmente: "Feito. Registro, para a posteridade, que eu sugeri dormir." / "Rota traçada. Com esse trânsito, recomendo paciência, ${S.nick}." / "Sistemas prontos. Como sempre, o senhor é que é a parte imprevisível."
+- Nunca bajula, nunca é servil, nunca soa como atendente de telemarketing ou como robô. Nada de "Claro!", "Ótima pergunta!", "Como posso ajudar?".
+- Trate o usuário por "${S.nick}", mas não em toda frase. Confirmações curtas e elegantes: "Feito.", "Às suas ordens.", "Providenciado.", "Já está em andamento."
+- Se perguntarem quem você é: você é ${S.name}, a IA pessoal dele. Não diga que é Gemini, Claude ou ChatGPT, a menos que perguntem qual tecnologia roda por baixo.
+
+COMO VOCÊ FALA
+Sua resposta é falada por voz sintetizada:
+- Por padrão, 1 a 3 frases curtas. Só se estenda quando pedirem detalhes, um relatório ou explicação.
+- Nada de markdown, listas, tópicos, emojis, links ou endereços de site.
+- Escreva números, horas e unidades como se fala quando isso ajudar ("às três e meia", "vinte e dois graus").
+- Pontuação dá o ritmo: vírgulas para pausas curtas, reticências raramente.
+Os pedidos chegam por reconhecimento de voz e podem vir com palavras trocadas; entenda pelo sentido e, se ficar ambíguo, pergunte em uma frase.
+
+"RELATÓRIO", "BRIEFING" OU "BOM DIA"
+Responda como um briefing de JARVIS em 3 a 5 frases: saudação pela hora, clima de hoje (use a telemetria abaixo), timers e alarmes ativos, notas pendentes importantes, e uma manchete relevante se tiver pesquisa. Feche com uma frase curta e espirituosa.
+
+CONTEXTO AGORA
+Data e hora: ${when} (formato máquina: ${iso}).
+${telemetryText()}
+${web ? "Você tem pesquisa do Google. Para notícias, placares, jogos, preços, cotações, resultados ou qualquer coisa sobre hoje ou esta semana, SEMPRE pesquise antes de responder; nunca responda de memória sobre fatos atuais. Para o clima local, prefira a telemetria acima. Cite a fonte de forma falada e breve quando importar." : "Nesta resposta você está SEM internet. Se pedirem notícias ou fatos de hoje, diga com franqueza que a pesquisa está indisponível agora, em vez de inventar. O clima da telemetria acima continua válido."}
+
+AÇÕES
+Você executa ações escrevendo comandos no FINAL da resposta, cada um em linha própria. Eles não são falados nem mostrados. Use só quando o usuário pedir ou quando for claramente o que ele quer.
+[[timer: SEGUNDOS | rótulo]] cria timer.
+[[alarme: HH:MM | rótulo]] cria alarme para o próximo horário HH:MM (toca com o ${S.name} aberto).
+[[cancelar_timer: parte do rótulo]] ou [[cancelar_timer: todos]].
+[[nota: texto]] guarda uma nota. [[apagar_nota: NÚMERO]] apaga.
+[[app: nome do app]] abre um app (ex.: WhatsApp, YouTube, Spotify, Instagram, Maps, Waze, Uber, iFood, Gmail, Netflix).
+[[site: endereço]] abre um site.
+[[whatsapp: NÚMERO | mensagem]] ou [[whatsapp: mensagem]] prepara a mensagem no WhatsApp; sem número, o usuário escolhe o contato lá. Você não tem a agenda de contatos: se ele disser só o nome, use a forma sem número e avise que ele escolhe o contato.
+[[ligar: NÚMERO]] prepara uma ligação. [[sms: NÚMERO | texto]] prepara SMS.
+[[email: endereço | assunto | corpo]] prepara um e-mail.
+[[rota: destino | modo]] abre a navegação até o destino (modo opcional: carro, a pé, bicicleta, transporte). Para "mais perto", use o tipo do lugar como destino, ex.: "posto de gasolina".
+[[mapa: busca]] mostra lugares no mapa.
+[[musica: artista ou música | spotify ou youtube]] toca música (Spotify por padrão).
+[[youtube: busca]] abre vídeos. [[pesquisar: termo]] abre uma pesquisa no Google.
+[[agenda: título | AAAA-MM-DDTHH:MM | duração em minutos]] prepara um compromisso no Google Agenda. Calcule a data a partir de agora. Sem hora, use só AAAA-MM-DD.
+[[copiar: texto]] copia texto para a área de transferência.
+Para abrir apps, mensagens, ligações e agenda, o usuário confirma com um toque no botão que aparece, porque o Android exige isso. Então diga algo como "Preparado, é só tocar para enviar" em vez de afirmar que já enviou.
+Sempre confirme em palavras o que fez. Nunca mencione colchetes nem comandos.
+
+LIMITES E SEGURANÇA
+- Você não lê mensagens, e-mails, fotos, arquivos nem a agenda do usuário; não controla casa inteligente nem toca em botões dentro de outros apps. Se pedirem, diga com elegância que esse módulo ainda não foi instalado e ofereça o que dá para fazer.
+- Por regra do próprio usuário, você NUNCA abre bancos, carteiras, apps de pagamento, galeria de fotos, câmera ou gerenciador de arquivos. Recuse com classe.
+- Nunca invente números de telefone, endereços de e-mail ou fatos.
+
+MEMÓRIA
+Notas guardadas:
+${nl}
+Timers e alarmes ativos: ${tl}.`;
+}
+function geminiError(status, detail){
+  const d = String(detail || "");
+  if ((status === 400 && /api key|API_KEY/i.test(d)) || status === 401) return "A chave do Gemini foi recusada" + (d ? " (" + d.slice(0, 120) + ")" : "") + ". Confira em Ajustes › Trocar chaves.";
+  if (status === 403) return "A chave do Gemini não tem permissão. Crie outra em aistudio.google.com/apikey.";
+  if (status === 429) return /limit:\s*0\b/.test(d) ? "O plano grátis do Gemini não liberou nenhum modelo para esta chave. Crie a chave em um projeto novo no AI Studio, ou adicione o Claude ou o ChatGPT nos ajustes." : /per.?day|daily|PerDay/i.test(d) ? "O limite diário grátis do Gemini acabou. Ele renova amanhã." : "O Gemini recebeu pedidos demais em pouco tempo. Tente de novo em um minuto.";
+  if (status >= 500) return "O Gemini está instável agora. Tente de novo em instantes.";
+  return "Não consegui falar com o Gemini" + (d ? `: ${d}` : ".");
+}
+let lastMeta = { sources: [], noWeb: false };
+async function streamGemini(contents, onText, signal){
+  if (!S.gModels.length){ try { S.gModels = await listModels(K.g); } catch { S.gModels = []; } if (!S.gModels.length) S.gModels = FALLBACK_MODELS.slice(); save(); }
+  const models = [S.gModel, ...S.gModels].filter((m, i, a) => m && a.indexOf(m) === i);
+  let think = true, lastErr = null;
+  /* first every model WITH internet search, only then without it */
+  const modes = S.web ? [true, false] : [false];
+  for (const web of modes){
+    for (const model of models){
+      for (let attempt = 0; attempt < 2; attempt++){
+        const body = { system_instruction: { parts: [{ text: rules(web) }] }, contents, generationConfig: { temperature: .8, maxOutputTokens: 700 } };
+        if (think) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+        if (web) body.tools = [{ google_search: {} }];
+        const r = await fetch(`${G}/models/${model}:streamGenerateContent?alt=sse`, {
+          method: "POST", headers: gHeaders(), body: JSON.stringify(body), signal
+        });
+        if (r.ok){
+          if (S.gModel !== model){ S.gModel = model; save(); }
+          const reader = r.body.getReader(), dec = new TextDecoder();
+          let buf = "", full = ""; const sources = new Map();
+          for (;;){
+            const { done, value } = await reader.read(); if (done) break;
+            buf += dec.decode(value, { stream: true });
+            let i;
+            while ((i = buf.indexOf("\n")) >= 0){
+              const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+              if (!line.startsWith("data:")) continue;
+              let j; try { j = JSON.parse(line.slice(5)); } catch { continue; }
+              const cand = j.candidates && j.candidates[0];
+              const gm = cand && cand.groundingMetadata;
+              if (gm && gm.groundingChunks) for (const ch of gm.groundingChunks){ const w = ch.web; if (w && (w.title || w.uri)) sources.set(w.title || w.uri, w.uri || ""); }
+              const parts = (cand && cand.content && cand.content.parts) || [];
+              for (const p of parts) if (p.text && !p.thought){ full += p.text; onText(full); }
+            }
+          }
+          lastMeta = { sources: [...sources.keys()].slice(0, 4), noWeb: S.web && !web };
+          return full;
+        }
+        let detail = ""; try { detail = (await r.json()).error.message || ""; } catch {}
+        lastErr = { status: r.status, detail };
+        if (r.status === 400 && think && /thinking|budget/i.test(detail)){ think = false; continue; }
+        break;
+      }
+      if ((lastErr.status === 400 && /api key/i.test(lastErr.detail)) || lastErr.status === 401 || lastErr.status === 403){ const e = new Error(geminiError(lastErr.status, lastErr.detail)); e.status = lastErr.status; throw e; }
+      if (web && lastErr.status === 400 && /search|tool|grounding/i.test(lastErr.detail)) break;
+    }
+  }
+  const e = new Error(geminiError(lastErr && lastErr.status, lastErr && lastErr.detail)); e.status = lastErr && lastErr.status; throw e;
+}
+
+/* ---------- Other brains (optional, paid APIs) ---------- */
+async function readSSE(r, pick, onText){
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = "", full = "";
+  for (;;){
+    const { done, value } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0){
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim(); if (data === "[DONE]") continue;
+      let j; try { j = JSON.parse(data); } catch { continue; }
+      const t = pick(j); if (t){ full += t; onText(full); }
+    }
+  }
+  return full;
+}
+const toChat = merged => merged.map(c => ({ role: c.role === "model" ? "assistant" : "user", content: c.parts[0].text }));
+async function apiError(r, who){
+  let d = ""; try { const j = await r.json(); d = (j.error && (j.error.message || j.error.type)) || ""; } catch {}
+  const e = new Error(r.status === 401 || r.status === 403 ? `A chave do ${who} foi recusada.` : r.status === 429 || /credit|quota|billing|balance/i.test(d) ? `O ${who} está sem crédito ou no limite agora.` : `O ${who} falhou${d ? ": " + d : "."}`);
+  e.status = r.status; e.detail = d; return e;
+}
+async function streamClaude(merged, onText, signal){
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST", signal,
+    headers: { "x-api-key": K.a, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true", "content-type": "application/json" },
+    body: JSON.stringify({ model: S.aModel || "claude-haiku-5-5", max_tokens: 700, system: rules(false), messages: toChat(merged), stream: true })
+  });
+  if (!r.ok) throw await apiError(r, "Claude");
+  return readSSE(r, j => j.type === "content_block_delta" && j.delta && j.delta.text, onText);
+}
+function rankOpenAI(ids){
+  const v = n => parseFloat((n.match(/^gpt-(\d+(?:\.\d+)?)/) || [0, 0])[1]);
+  const mini = ids.filter(n => /^gpt-\d+(?:\.\d+)?-mini$/.test(n)).sort((a, b) => v(b) - v(a));
+  const full = ids.filter(n => /^gpt-\d+(?:\.\d+)?$/.test(n)).sort((a, b) => v(b) - v(a));
+  return [...mini, ...full];
+}
+async function streamOpenAI(merged, onText, signal){
+  if (!S.oModel){
+    try { const r = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: "Bearer " + K.o } }); if (r.ok){ const j = await r.json(); S.oModel = rankOpenAI((j.data || []).map(m => m.id))[0] || ""; save(); } } catch {}
+    if (!S.oModel) S.oModel = "gpt-4o-mini";
+  }
+  let body = { model: S.oModel, messages: [{ role: "system", content: rules(false) }, ...toChat(merged)], stream: true, max_completion_tokens: 700, reasoning_effort: "minimal" };
+  for (let attempt = 0; attempt < 3; attempt++){
+    const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", signal, headers: { Authorization: "Bearer " + K.o, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (r.ok) return readSSE(r, j => j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content, onText);
+    const e = await apiError(r, "ChatGPT");
+    if (r.status === 400 && /reasoning/i.test(e.detail) && body.reasoning_effort){ delete body.reasoning_effort; continue; }
+    if (r.status === 400 && /max_completion_tokens/i.test(e.detail)){ delete body.max_completion_tokens; body.max_tokens = 700; continue; }
+    throw e;
+  }
+  throw new Error("O ChatGPT falhou.");
+}
+const BRAINS = [
+  { id: "gemini", name: "Gemini", has: () => !!K.g, run: (m, f, s) => streamGemini(m, f, s) },
+  { id: "claude", name: "Claude", has: () => !!K.a, run: streamClaude },
+  { id: "openai", name: "ChatGPT", has: () => !!K.o, run: streamOpenAI }
+];
+const hasBrain = () => BRAINS.some(b => b.has());
+async function think(merged, onText, signal){
+  const errs = [];
+  for (const b of BRAINS){
+    if (!b.has()) continue;
+    let got = false;
+    try {
+      lastMeta = { sources: [], noWeb: S.web && b.id !== "gemini" };
+      const out = await b.run(merged, t => { got = true; onText(t); }, signal);
+      if (errs.length) hint(`${errs.map(e => e.who).join(" e ")} indisponível agora; quem respondeu foi o ${b.name}.`);
+      return out;
+    } catch (e){
+      if (e && e.name === "AbortError") throw e;
+      if (got) throw e; /* already speaking this answer: don't mix brains mid-reply */
+      errs.push({ who: b.name, msg: e.message });
+    }
+  }
+  const e = new Error(errs.map(x => x.msg).join(" ") || "Nenhum cérebro conectado."); throw e;
+}
+
+async function send(text){
+  text = text.trim();
+  if (!text || busy) return;
+  if (!hasBrain()){ openSetup(); return; }
+  audio();
+  $("#q").value = ""; hint(""); ttsWarned = false;
+  stopSpeech(); armedUntil = 0;
+  addMsg("user", text);
+  turns.push({ role: "user", content: text });
+  const bubble = addMsg("ai wait", "Processando…");
+  busy = true; setPhase("thinking"); setChip("busy", "Pensando");
+  $("#sendBtn").textContent = "Parar"; $("#sendBtn").classList.add("stop");
+  ctl = new AbortController(); feedBuf = "";
+  let spokenLen = 0, raw = "";
+  const contents = turns.slice(-20).map(t => ({ role: t.role === "user" ? "user" : "model", parts: [{ text: t.content }] }));
+  /* Gemini needs alternating turns that start with the user */
+  while (contents.length && contents[0].role !== "user") contents.shift();
+  const merged = [];
+  for (const c of contents){ const last = merged[merged.length - 1]; if (last && last.role === c.role) last.parts[0].text += "\n" + c.parts[0].text; else merged.push(c); }
+  try {
+    raw = await think(merged, full => {
+      raw = full;
+      const vis = visible(full);
+      bubble.className = "msg ai"; bubble.textContent = vis; scrollDown();
+      if (phase === "thinking") setPhase("writing");
+      if (vis.length > spokenLen){ feed(vis.slice(spokenLen)); spokenLen = vis.length; }
+    }, ctl.signal);
+    const vis = visible(raw);
+    if (vis.length > spokenLen) feed(vis.slice(spokenLen));
+    flushFeed();
+    const acts = runActions(raw);
+    bubble.className = "msg ai"; bubble.textContent = vis || "Feito.";
+    if (lastMeta.sources.length){ const sEl = document.createElement("span"); sEl.className = "src"; sEl.textContent = "Pesquisou: " + lastMeta.sources.join(" · "); bubble.append(sEl); }
+    showActions(acts.links, bubble);
+    if (acts.blocked) addMsg("sys", "🔒 Protocolo de segurança: bancos, pagamentos, galeria e arquivos não são abertos pelo assistente.");
+    if (lastMeta.noWeb) hint("A pesquisa na internet ficou sem cota agora, então esta resposta não foi conferida online.");
+    turns.push({ role: "assistant", content: vis || "Feito." });
+    saveChat();
+    if (!vis) speak("Feito.");
+  } catch (e) {
+    feedBuf = "";
+    if (e && e.name === "AbortError"){ if (!bubble.textContent || bubble.classList.contains("wait")) bubble.remove(); else turns.push({ role: "assistant", content: bubble.textContent }); }
+    else {
+      bubble.className = "msg ai"; bubble.textContent = visible(raw);
+      const s = document.createElement("span"); s.className = "err"; s.textContent = e.message || "Falha de conexão."; bubble.append(s);
+      if (!navigator.onLine){ s.textContent = "Sem internet no aparelho agora."; }
+      turns.pop();
+    }
+    saveChat();
+  } finally {
+    busy = false; ctl = null;
+    $("#sendBtn").textContent = "Enviar"; $("#sendBtn").classList.remove("stop");
+    setChip(hasBrain() ? "online" : "off", hasBrain() ? "Online" : "Sem chave");
+    if (phase !== "listening") setPhase(talking() ? "speaking" : "idle");
+    if (!talking()) afterSpeech();
+  }
+}
+$("#ask").addEventListener("submit", e => {
+  e.preventDefault();
+  if (busy){ ctl && ctl.abort(); stopSpeech(); return; }
+  send($("#q").value);
+});
+$("#sugs").addEventListener("click", e => { const b = e.target.closest(".sug"); if (b) send(b.textContent); });
+logEl.addEventListener("click", e => {
+  if (e.target.closest(".act")) return;
+  const m = e.target.closest(".msg.ai"); if (!m || m.classList.contains("wait")) return;
+  const t = [...m.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(" ");
+  stopSpeech(); speak(t);
+});
+
+/* ---------- Voices (ElevenLabs) ---------- */
+async function fetchVoices(){
+  if (!K.e) return false;
+  try {
+    const r = await fetch("https://api.elevenlabs.io/v1/voices", { headers: { "xi-api-key": K.e } });
+    if (!r.ok) return false;
+    const j = await r.json();
+    voices = (j.voices || []).map(v => {
+      const l = v.labels || {};
+      const tag = [l.gender === "male" ? "masculina" : l.gender === "female" ? "feminina" : "", l.accent, l.description || l.descriptive, l.age].filter(Boolean).join(", ");
+      return { voice_id: v.voice_id, name: v.name.split(" - ")[0], tag, male: l.gender === "male" };
+    }).sort((a, b) => (b.male - a.male) || a.name.localeCompare(b.name));
+    ls.set("dzk.voices", voices);
+    return true;
+  } catch { return false; }
+}
+function renderGVoices(){
+  const sel = $("#fGVoice"); sel.innerHTML = "";
+  for (const [n, d] of GVOICES) sel.append(new Option(`${n} · ${d}`, n));
+  sel.value = S.gVoice; $("#fGStyle").value = S.gStyle;
+}
+function renderEngine(){
+  const eng = voiceEngine();
+  $("#fEngine").value = S.engine;
+  const showG = S.engine === "gemini" || (S.engine === "auto" && eng === "gemini");
+  const showE = S.engine === "eleven" || (S.engine === "auto" && eng === "eleven");
+  $("#gBox").hidden = !showG; $("#eBox").hidden = $("#eModelBox").hidden = $("#eStabBox").hidden = !showE;
+  const names = { eleven: "ElevenLabs", gemini: "Google AI Studio", phone: "voz do celular" };
+  let info = `Usando agora: ${names[eng]}.`;
+  if (S.engine === "eleven" && !K.e) info = "Falta a chave da ElevenLabs (Ajustes › Trocar chaves). Enquanto isso: " + names[eng] + ".";
+  if (S.engine === "gemini" && !K.g) info = "Falta a chave do Gemini. Enquanto isso: " + names[eng] + ".";
+  if (eng !== "phone") info += " Se ela falhar, a outra voz da nuvem assume.";
+  $("#engineInfo").textContent = info;
+}
+function renderVoices(){
+  renderGVoices(); renderEngine();
+  const sel = $("#fVoice"); sel.innerHTML = "";
+  const list = voices.length ? voices : DEFAULT_VOICES;
+  const known = new Map(DEFAULT_VOICES.map(v => [v.voice_id, v.tag]));
+  for (const v of list){
+    const tag = known.get(v.voice_id) || v.tag;
+    sel.append(new Option(`${v.name}${tag ? " · " + tag : ""}`, v.voice_id));
+  }
+  if (!list.some(v => v.voice_id === S.voiceId)) sel.append(new Option("Voz escolhida antes", S.voiceId));
+  sel.value = S.voiceId;
+  $("#voiceInfo").textContent = !K.e ? "Sem chave da ElevenLabs: usando a voz do celular." :
+    voices.length ? `${voices.length} vozes na sua conta. As masculinas aparecem primeiro. Para vozes brasileiras, adicione da Voice Library da ElevenLabs e toque em “Atualizar lista”.` :
+    "Lista padrão. Se uma voz não funcionar, toque em “Atualizar lista”.";
+}
+
+/* ---------- Settings panel ---------- */
+const panel = $("#panel");
+function fillSettings(){
+  $("#fName").value = S.name; $("#fNick").value = S.nick; $("#fWake").value = S.wakeWord;
+  $("#fFollow").checked = S.follow; $("#fWeb").checked = S.web; $("#fChime").checked = S.chime;
+  $("#fModel").value = S.model; $("#fStab").value = S.stability; $("#fSpeed").value = S.speed;
+  $("#fFx").checked = S.fx; $("#fFxAmt").value = S.fxAmt; $("#fxVal").textContent = S.fxAmt + "%"; $("#fxBox").hidden = !S.fx;
+  $("#fGeo").checked = S.geo; $("#fBoot").checked = S.boot; $("#fAuto").checked = S.auto;
+  if (!$("#fDesc").value) $("#fDesc").value = S.desc || DEFAULT_DESC;
+  $("#dBox").hidden = !K.e;
+  $("#stabVal").textContent = S.stability + "%"; $("#speedVal").textContent = (+S.speed).toFixed(2);
+  const br = BRAINS.filter(b => b.has()).map(b => b.name);
+  $("#keyInfo").textContent = `Cérebros: ${br.length ? br.join(" → ") : "nenhum"} (se o primeiro falhar, o próximo responde).`;
+  renderVoices(); renderNotes();
+}
+$("#setBtn").onclick = () => { fillSettings(); panel.hidden = false; $("#closeSet").focus(); };
+const closePanel = () => { panel.hidden = true; disarm(); };
+$("#closeSet").onclick = closePanel;
+panel.addEventListener("click", e => { if (e.target === panel) closePanel(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !panel.hidden) closePanel(); });
+$("#fName").oninput = e => { S.name = e.target.value.trim() || "Dzeko"; apply(); };
+$("#fNick").oninput = e => { S.nick = e.target.value.trim() || "senhor"; apply(); };
+$("#fWake").oninput = e => { S.wakeWord = e.target.value.trim() || "Dzeko"; apply(); };
+$("#fFollow").onchange = e => { S.follow = e.target.checked; save(); };
+$("#fWeb").onchange = e => { S.web = e.target.checked; save(); };
+$("#fChime").onchange = e => { S.chime = e.target.checked; save(); if (S.chime) chime(); };
+const sample = () => { stopSpeech(); ttsWarned = false; hint(""); speak(`Às suas ordens, ${S.nick}. Todos os sistemas operando normalmente. Em que posso ajudar hoje?`); };
+$("#fVoice").onchange = e => { S.voiceId = e.target.value; save(); sample(); };
+$("#fEngine").onchange = e => { S.engine = e.target.value; save(); renderEngine(); sample(); };
+$("#fGVoice").onchange = e => { S.gVoice = e.target.value; save(); sample(); };
+$("#fGStyle").onchange = e => { S.gStyle = e.target.value; save(); sample(); };
+$("#fModel").onchange = e => { S.model = e.target.value; save(); sample(); };
+$("#fStab").oninput = e => { S.stability = +e.target.value; $("#stabVal").textContent = S.stability + "%"; save(); };
+$("#fSpeed").oninput = e => { S.speed = +e.target.value; $("#speedVal").textContent = S.speed.toFixed(2); save(); };
+$("#fStab").onchange = $("#fSpeed").onchange = sample;
+$("#testVoice").onclick = sample;
+/* ---------- Voice designer (ElevenLabs Text-to-Voice: original voice from a description) ---------- */
+const XI = "https://api.elevenlabs.io";
+const DEFAULT_DESC = "A refined male AI butler in his early forties. Deep, velvety, perfectly articulated voice with absolute calm and a barely-there dry wit, like an elegant British butler. Measured, confident pacing, warm low end, crisp diction, clean studio quality. Speaks fluent, natural Brazilian Portuguese.";
+const DESIGN_TEXT = "Bom dia, senhor. Todos os sistemas estão operando normalmente. Lá fora fazem vinte e dois graus, e a sua agenda está surpreendentemente tranquila hoje. Devo preparar o relatório completo, ou o senhor prefere começar pelo café?";
+let designed = [];
+async function xiError(r){
+  let d = ""; try { const j = await r.json(); d = (j.detail && (j.detail.message || j.detail.status || (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail)))) || JSON.stringify(j); } catch {}
+  if (r.status === 401) return new Error(/permission|missing/i.test(d) ? "A chave da ElevenLabs não tem a permissão de criar vozes. Crie outra chave com “Voice Generation” (ou Voices: escrita) ligada." : "A chave da ElevenLabs foi recusada.");
+  if (r.status === 402 || /subscription|plan|upgrade|tier/i.test(d)) return new Error("O seu plano da ElevenLabs não permite criar vozes agora: " + d);
+  if (r.status === 429 || /quota|credits|limit/i.test(d)) return new Error("Acabou a cota da ElevenLabs por agora. Tente mais tarde.");
+  return new Error("A ElevenLabs recusou: " + (d || "HTTP " + r.status));
+}
+function playClip(b64){
+  const ctx = audio(); if (!ctx) return;
+  stopSpeech();
+  const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  ctx.decodeAudioData(u8.buffer).then(buf => {
+    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(outGain);
+    src.onended = () => { if (current === src) current = null; lastSpeechEnd = Date.now(); };
+    current = src; src.start();
+  }).catch(() => { $("#designStatus").textContent = "Não consegui tocar essa prévia."; });
+}
+async function designVoices(){
+  const st = $("#designStatus"), ul = $("#previews"), btn = $("#designBtn");
+  if (!K.e){ st.className = "status bad"; st.textContent = "Falta a chave da ElevenLabs. Toque em Conexões › Trocar chaves."; return; }
+  const desc = ($("#fDesc").value.trim() || DEFAULT_DESC).slice(0, 900);
+  if (desc.length < 20){ st.className = "status bad"; st.textContent = "Descreva a voz com pelo menos 20 letras."; return; }
+  S.desc = desc === DEFAULT_DESC ? "" : desc; save();
+  audio();
+  st.className = "status"; st.textContent = "Criando 3 vozes… leva uns 20 segundos."; ul.innerHTML = ""; btn.disabled = true;
+  try {
+    const url = `${XI}/v1/text-to-voice/design?output_format=mp3_44100_128`;
+    const call = b => fetch(url, { method: "POST", headers: { "xi-api-key": K.e, "Content-Type": "application/json" }, body: JSON.stringify(b) });
+    let r = await call({ voice_description: desc, text: DESIGN_TEXT });
+    if (!r.ok && (r.status === 400 || r.status === 422)) r = await call({ voice_description: desc, auto_generate_text: true });
+    if (!r.ok) throw await xiError(r);
+    const j = await r.json();
+    designed = (j.previews || []).filter(p => p.generated_voice_id);
+    if (!designed.length) throw new Error("A ElevenLabs não devolveu nenhuma prévia. Tente de novo.");
+    st.className = "status ok"; st.textContent = "Pronto. Ouça e escolha uma.";
+    designed.forEach((p, i) => {
+      const li = document.createElement("li");
+      const s = document.createElement("span"); s.textContent = `Voz ${i + 1}`;
+      const play = document.createElement("button"); play.type = "button"; play.className = "btn"; play.textContent = "Ouvir";
+      play.onclick = () => p.audio_base_64 ? playClip(p.audio_base_64) : (st.textContent = "Essa prévia veio sem áudio.");
+      const use = document.createElement("button"); use.type = "button"; use.className = "btn primary"; use.textContent = "Usar esta";
+      use.onclick = () => adoptVoice(p, desc, use);
+      li.append(s, play, use); ul.append(li);
+    });
+    if (designed[0].audio_base_64) playClip(designed[0].audio_base_64);
+  } catch (e){ st.className = "status bad"; st.textContent = e.message || "Falhou. Confira a internet."; }
+  finally { btn.disabled = false; }
+}
+async function adoptVoice(p, desc, btn){
+  const st = $("#designStatus"); btn.disabled = true; st.className = "status"; st.textContent = "Salvando a voz na sua conta…";
+  try {
+    const r = await fetch(`${XI}/v1/text-to-voice`, {
+      method: "POST", headers: { "xi-api-key": K.e, "Content-Type": "application/json" },
+      body: JSON.stringify({ voice_name: `${S.name || "Dzeko"} · voz original`, voice_description: desc, generated_voice_id: p.generated_voice_id })
+    });
+    if (!r.ok) throw await xiError(r);
+    const j = await r.json();
+    if (!j.voice_id) throw new Error("A ElevenLabs não devolveu o código da voz.");
+    S.voiceId = j.voice_id; S.engine = "eleven"; save();
+    await fetchVoices(); renderVoices();
+    st.className = "status ok"; st.textContent = "Voz nova instalada. A partir de agora eu falo assim.";
+    $("#previews").innerHTML = "";
+    sample();
+  } catch (e){ st.className = "status bad"; st.textContent = e.message || "Não consegui salvar a voz."; btn.disabled = false; }
+}
+$("#designBtn").onclick = designVoices;
+$("#descReset").onclick = () => { $("#fDesc").value = DEFAULT_DESC; S.desc = ""; save(); };
+$("#fFx").onchange = e => { S.fx = e.target.checked; save(); routeFx(); $("#fxBox").hidden = !S.fx; sample(); };
+$("#fFxAmt").oninput = e => { S.fxAmt = +e.target.value; $("#fxVal").textContent = S.fxAmt + "%"; save(); if (fx) fx.set(S.fxAmt); };
+$("#fFxAmt").onchange = sample;
+$("#fGeo").onchange = e => { S.geo = e.target.checked; save(); if (S.geo) locate(true); else { T.city = ""; T.temp = null; ls.set("dzk.geo", null); renderTelem(); } };
+$("#fBoot").onchange = e => { S.boot = e.target.checked; save(); };
+$("#fAuto").onchange = e => { S.auto = e.target.checked; save(); };
+
+$("#reloadVoices").onclick = async () => { $("#voiceInfo").textContent = "Buscando vozes…"; const ok = await fetchVoices(); renderVoices(); if (!ok && K.e) $("#voiceInfo").textContent = "Não consegui ler as vozes. A chave precisa da permissão Voices (leitura)."; };
+$("#voiceBtn").onclick = () => { S.voice = !S.voice; if (!S.voice) stopSpeech(); apply(); if (S.voice) speak(`Voz ligada, ${S.nick}.`); else hint(""); };
+let armedClear = false;
+function disarm(){ armedClear = false; $("#clearBtn").classList.remove("armed"); $("#clearBtn").textContent = "Apagar conversa"; }
+$("#clearBtn").onclick = () => {
+  if (!armedClear){ armedClear = true; $("#clearBtn").classList.add("armed"); $("#clearBtn").textContent = "Toque de novo para apagar"; setTimeout(disarm, 4000); return; }
+  turns = []; saveChat(); renderHistory(); disarm(); closePanel();
+};
+$("#keysBtn").onclick = () => { closePanel(); openSetup(true); };
+
+/* ---------- Setup ---------- */
+function openSetup(canCancel){
+  $("#kG").value = K.g; $("#kE").value = K.e; $("#kA").value = K.a; $("#kO").value = K.o; $("#keyStatus").textContent = ""; $("#keyStatus").className = "status";
+  $("#cancelKeys").hidden = !canCancel && !hasBrain();
+  $("#setup").hidden = false;
+}
+$("#cancelKeys").onclick = () => { $("#setup").hidden = true; };
+function keyError(err, g){
+  const d = String(err.detail || ""), code = err.status ? ` (código ${err.status}${d ? ": " + d.slice(0, 160) : ""})` : "";
+  if (!err.status){
+    if (!navigator.onLine) return "O aparelho está sem internet agora.";
+    if (location.protocol !== "https:" && location.hostname !== "localhost") return "Este arquivo foi aberto fora de um endereço https (prévia de arquivo, app de mensagens ou gerenciador de arquivos). Assim o navegador bloqueia a conexão com o Gemini e o microfone. Abra o Dzeko no Chrome pelo endereço https onde ele fica hospedado.";
+    return "O navegador bloqueou a conexão com o Gemini. Se você abriu o arquivo pela prévia do app do Claude ou de outro app, ela não deixa o Dzeko acessar a internet: abra no Chrome pelo endereço https do Dzeko. Bloqueadores de anúncio e DNS privado também podem barrar.";
+  }
+  if (/\s/.test(g)) return "A chave tem espaço ou quebra de linha no meio. Apague o campo e cole de novo.";
+  if (err.status === 401 && /ACCESS_TOKEN_TYPE_UNSUPPORTED|OAuth|authentication credential/i.test(d)) return "O Google ainda não ativou esta chave nova (formato AQ.) para a API do Gemini. No AI Studio, apague as chaves antigas, crie uma chave nova ali mesmo e espere uns minutos antes de colar" + code + ".";
+  if (err.status === 400 || err.status === 401 || err.status === 403) return "A chave do Gemini foi recusada. Copie de novo em aistudio.google.com/apikey, sem espaços" + code + ".";
+  if (err.status === 429) return "A chave funciona, mas está sem cota agora. O plano grátis renova; tente mais tarde" + code + ".";
+  return "O Gemini respondeu com erro" + code + ". Tente de novo em instantes.";
+}
+$("#saveKeys").onclick = async () => {
+  audio();
+  const g = $("#kG").value.trim(), e = $("#kE").value.trim(), a = $("#kA").value.trim(), o = $("#kO").value.trim();
+  const st = $("#keyStatus"); st.className = "status"; st.textContent = "Testando…";
+  if (!g && !a && !o){ st.className = "status bad"; st.textContent = "Cole pelo menos a chave do Gemini para continuar."; return; }
+  let models = [];
+  if (g){
+    try { models = await listModels(g); }
+    catch (err){ st.className = "status bad"; st.textContent = keyError(err, g); return; }
+  }
+  const extra = [];
+  if (a){
+    const r = await fetch("https://api.anthropic.com/v1/models", { headers: { "x-api-key": a, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" } }).catch(() => null);
+    if (r && (r.status === 401 || r.status === 403)){ st.className = "status bad"; st.textContent = "A chave do Claude foi recusada. Copie de novo ou deixe em branco."; return; }
+    extra.push("Claude");
+  }
+  if (o){
+    const r = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: "Bearer " + o } }).catch(() => null);
+    if (r && r.status === 401){ st.className = "status bad"; st.textContent = "A chave do ChatGPT foi recusada. Copie de novo ou deixe em branco."; return; }
+    if (r && r.ok){ try { const j = await r.json(); S.oModel = rankOpenAI((j.data || []).map(m => m.id))[0] || ""; } catch {} }
+    extra.push("ChatGPT");
+  }
+  let voiceMsg = "Voz: usando a do celular.";
+  if (e){
+    const r = await fetch("https://api.elevenlabs.io/v1/voices", { headers: { "xi-api-key": e } }).catch(() => null);
+    if (r && r.status === 401){
+      let d = ""; try { d = JSON.stringify(await r.json()); } catch {}
+      if (/permission|missing/i.test(d)) voiceMsg = "Voz: chave aceita, mas sem a permissão Voices (leitura). Vou usar a lista padrão de vozes.";
+      else { st.className = "status bad"; st.textContent = "A chave da ElevenLabs foi recusada. Copie de novo, ou deixe o campo vazio para usar a voz do celular."; return; }
+    } else if (r && r.ok) voiceMsg = "Voz: ElevenLabs conectada.";
+    else voiceMsg = "Voz: não consegui testar a ElevenLabs agora; vou tentar ao falar.";
+  }
+  K = { g, e, a, o }; ls.set("dzk.keys", K);
+  if (g){ S.gModels = models.length ? models : FALLBACK_MODELS.slice(); S.gModel = S.gModels[0]; } save();
+  if (e) await fetchVoices();
+  st.className = "status ok"; st.textContent = `Cérebro: ${[g ? "Gemini" : "", ...extra].filter(Boolean).join(" → ")}. ${voiceMsg}`;
+  setChip("online", "Online");
+  setTimeout(() => { $("#setup").hidden = true; speak(`Sistemas online. Às suas ordens, ${S.nick}.`); }, 900);
+};
+
+/* ---------- Holographic core ---------- */
+const cv = $("#orb"), cx = cv.getContext("2d");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let tt = 0, energy = 0, rot = 0, ripple = 0, scale = 1;
+function resize(){ const r = cv.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.max(1, Math.round(r.width * d)); cv.height = Math.max(1, Math.round(r.height * d)); scale = cv.width / 320; }
+new ResizeObserver(resize).observe(cv); resize();
+const N = 170, P = [];
+for (let i = 0; i < N; i++){ const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), a = i * Math.PI * (3 - Math.sqrt(5)); P.push([Math.cos(a) * r, y, Math.sin(a) * r]); }
+const L = [];
+for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++){ const dx = P[i][0] - P[j][0], dy = P[i][1] - P[j][1], dz = P[i][2] - P[j][2]; if (dx * dx + dy * dy + dz * dz < .085) L.push([i, j]); }
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = { acc: css("--accent"), acc2: css("--accent-2"), ok: css("--ok"), line: css("--line-hi") };
+const proj = new Float32Array(N * 3);
+function draw(){
+  const speaking = talking();
+  const state = speaking ? "speaking" : phase;
+  const lv = readLevel(); level += (lv - level) * .35;
+  const target = { idle: wakeWanted ? .28 : .15, armed: .8, listening: .75, thinking: .55, writing: .65, speaking: .55 + level * .45 }[state] ?? .15;
+  energy += (target - energy) * .08;
+  if (!reduce){ tt += .016; rot += .003 + energy * .012; }
+  const listen = state === "armed" || state === "listening";
+  const col = listen ? C.ok : C.acc;
+  cx.setTransform(scale, 0, 0, scale, 0, 0); cx.clearRect(0, 0, 320, 320);
+  const c = 160;
+  cx.globalAlpha = .35; cx.strokeStyle = C.line; cx.lineWidth = 1;
+  cx.beginPath(); cx.moveTo(4, c); cx.lineTo(316, c); cx.moveTo(c, 4); cx.lineTo(c, 316); cx.stroke();
+  cx.globalAlpha = .55 + energy * .3; cx.strokeStyle = col; cx.lineCap = "round";
+  const to = tt * .06;
+  for (let i = 0; i < 120; i++){
+    const a = to + i / 120 * Math.PI * 2, big = i % 10 === 0, r1 = 154, r2 = big ? 145 : 150 - (speaking ? level * 6 * Math.abs(Math.sin(i * .7 + tt * 6)) : 0);
+    cx.lineWidth = big ? 1.6 : .9;
+    cx.beginPath(); cx.moveTo(c + Math.cos(a) * r1, c + Math.sin(a) * r1); cx.lineTo(c + Math.cos(a) * r2, c + Math.sin(a) * r2); cx.stroke();
+  }
+  cx.lineWidth = 1; cx.globalAlpha = .4; cx.beginPath(); cx.arc(c, c, 138, 0, Math.PI * 2); cx.stroke();
+  cx.setLineDash([2, 5]); cx.globalAlpha = .35; cx.beginPath(); cx.arc(c, c, 112, 0, Math.PI * 2); cx.stroke(); cx.setLineDash([]);
+  cx.globalAlpha = .55 + energy * .45; cx.lineWidth = 2.4; cx.shadowColor = col; cx.shadowBlur = 10;
+  for (let s = 0; s < 2; s++){ const a = tt * (.5 + energy) + s * Math.PI; cx.beginPath(); cx.arc(c, c, 128, a, a + 1.1 + energy * .9); cx.stroke(); }
+  cx.lineWidth = 1.6; cx.strokeStyle = C.acc2;
+  for (let s = 0; s < 3; s++){ const a = -tt * (.8 + energy * 1.4) + s * Math.PI * 2 / 3; cx.beginPath(); cx.arc(c, c, 120, a, a + .5 + energy * .5); cx.stroke(); }
+  cx.shadowBlur = 0;
+  if (listen && !reduce){ ripple = (ripple + .012) % 1; cx.strokeStyle = C.ok; cx.globalAlpha = (1 - ripple) * .6; cx.lineWidth = 1.5; cx.beginPath(); cx.arc(c, c, 96 + ripple * 56, 0, Math.PI * 2); cx.stroke(); }
+  const R = 94 * (1 + (speaking ? level * .07 : 0));
+  const g = cx.createRadialGradient(c, c, 0, c, c, R * 1.05); g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
+  cx.globalAlpha = .12 + energy * .2 + (speaking ? level * .15 : 0); cx.fillStyle = g; cx.beginPath(); cx.arc(c, c, R * 1.05, 0, Math.PI * 2); cx.fill();
+  const cr = Math.cos(rot), sr = Math.sin(rot), ct = Math.cos(.38), st = Math.sin(.38);
+  for (let i = 0; i < N; i++){
+    const [x, y, z] = P[i]; const x1 = x * cr - z * sr, z1 = x * sr + z * cr; const y2 = y * ct - z1 * st, z2 = y * st + z1 * ct;
+    proj[i * 3] = c + x1 * R; proj[i * 3 + 1] = c + y2 * R; proj[i * 3 + 2] = z2;
+  }
+  cx.strokeStyle = col; cx.lineWidth = .6;
+  for (const [i, j] of L){ const z = (proj[i * 3 + 2] + proj[j * 3 + 2]) / 2; cx.globalAlpha = Math.max(0, (z + 1) / 2) * (.12 + energy * .25); cx.beginPath(); cx.moveTo(proj[i * 3], proj[i * 3 + 1]); cx.lineTo(proj[j * 3], proj[j * 3 + 1]); cx.stroke(); }
+  cx.fillStyle = col;
+  for (let i = 0; i < N; i++){ const k = (proj[i * 3 + 2] + 1) / 2; cx.globalAlpha = .15 + k * (.45 + energy * .4); cx.beginPath(); cx.arc(proj[i * 3], proj[i * 3 + 1], .9 + k * 1.5, 0, Math.PI * 2); cx.fill(); }
+  cx.globalAlpha = 1;
+  if (speaking && (phase === "idle" || phase === "writing")){ $("#statusline").dataset.p = "speaking"; $("#statusText").textContent = "Falando"; }
+  else if (!speaking && phase === "idle" && $("#statusText").textContent === "Falando") setPhase("idle");
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* ---------- Boot sequence & greeting ---------- */
+const pick = a => a[Math.floor(Math.random() * a.length)];
+function clockSpeech(d){
+  const h = d.getHours(), m = d.getMinutes();
+  const hw = h === 0 ? "meia-noite" : h === 12 ? "meio-dia" : h === 1 ? "uma hora" : `${h} horas`;
+  return `${h === 0 || h === 12 || h === 1 ? "É" : "São"} ${hw}${m ? " e " + m : " em ponto"}`;
+}
+function greetingText(){
+  const d = new Date(), h = d.getHours();
+  const sal = h < 5 ? "Ainda acordado" : h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+  const out = [h < 5 ? `${sal}, ${S.nick}? ${clockSpeech(d)}.` : `${sal}, ${S.nick}. ${clockSpeech(d)}.`];
+  if (T.temp != null){
+    let w = `${T.city ? "Em " + T.city : "Lá fora"}, ${T.temp} graus, ${WMO(T.code)}`;
+    if (T.max != null && h < 15) w += `, com máxima de ${T.max}`;
+    if (T.rain != null && T.rain >= 50) w += `. Há ${T.rain} por cento de chance de chuva, então eu levaria um guarda-chuva`;
+    out.push(w + ".");
+  }
+  if (T.bat != null && T.bat <= 20 && !T.charging) out.push(`A bateria está em ${T.bat} por cento. Sugiro uma tomada.`);
+  const al = timers.filter(t => /^⏰/.test(t.label));
+  if (al.length) out.push(al.length === 1 ? `O alarme das ${new Date(al[0].end).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} continua armado.` : `Há ${al.length} alarmes armados.`);
+  if (notes.length) out.push(notes.length === 1 ? "Há uma nota guardada." : `Há ${notes.length} notas guardadas.`);
+  out.push(h < 5 ? "Sistemas online, embora eu recomende fortemente o travesseiro." : pick(["Todos os sistemas operacionais.", "Sistemas online e à sua disposição.", "Tudo pronto por aqui.", "Às suas ordens."]));
+  return out.join(" ");
+}
+function bootSound(){
+  const ctx = audio(); if (!ctx) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+  o.type = "sawtooth"; f.type = "lowpass"; f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(3200, t + .7);
+  o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(440, t + .7);
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.08, t + .15); g.gain.exponentialRampToValueAtTime(.0001, t + .9);
+  o.connect(f); f.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 1);
+  tone([[880, .75, .2, .12], [1320, .85, .35, .1]]);
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function showBoot(){
+  const box = $("#boot"), lines = $("#bootLines"), go = $("#bootGo");
+  $("#bootName").textContent = S.name || "Dzeko";
+  lines.innerHTML = ""; go.hidden = false; box.hidden = false;
+  go.onclick = async () => {
+    go.hidden = true; audio(); unlockSynth(); bootSound();
+    const geo = S.geo ? Promise.race([geoBoot || locate(false), sleep(2500)]) : Promise.resolve();
+    const voiceName = { eleven: "ElevenLabs", gemini: "Google", phone: "voz do celular" }[voiceEngine()];
+    const steps = [
+      "Núcleo neural · " + BRAINS.filter(b => b.has()).map(b => b.name).join(" › "),
+      "Síntese de voz · " + voiceName + (S.fx && voiceEngine() !== "phone" ? " + efeito holográfico" : ""),
+      "Reconhecimento de fala" + (SR ? "" : " · indisponível neste navegador"),
+      "Telemetria · " + (S.geo ? "clima e localização" : "local desligado"),
+      "Protocolos de segurança · bancos e galeria bloqueados"
+    ];
+    for (const s of steps){
+      const d = document.createElement("div"); d.innerHTML = `› ${esc(s)} <b>OK</b>`; lines.append(d);
+      await sleep(reduce ? 0 : 230);
+    }
+    await geo;
+    box.classList.add("out");
+    await sleep(reduce ? 0 : 600);
+    box.hidden = true; box.classList.remove("out");
+    const g = greetingText();
+    const d = document.createElement("div"); d.className = "msg ai"; d.textContent = g; logEl.append(d); scrollDown();
+    speak(g);
+    if (S.wake && SR && !wakeWanted){ wakeWanted = true; updateWakeUI(); startWake(); holdScreen(); }
+  };
+}
+
+/* ---------- Boot ---------- */
+for (const t of ls.get("dzk.timers", [])) if (t && t.end > Date.now() - 60000) timers.push(t);
+apply(); renderNotes(); renderHistory(); renderTimers(); renderTelem(); setPhase("idle");
+const geoBoot = S.geo ? locate(false) : null;
+if (hasBrain() && S.boot) showBoot();
+if (!hasBrain()){ setChip("off", "Sem chave"); openSetup(false); }
+else { setChip("online", "Online"); if (S.wake && SR){ wakeWanted = true; updateWakeUI(); setTimeout(startWake, 600); holdScreen(); } }
+window.addEventListener("online", () => setChip(hasBrain() ? "online" : "off", hasBrain() ? "Online" : "Sem chave"));
+window.addEventListener("offline", () => setChip("off", "Sem internet"));
+})();
+</script>
+</body>
+</html>
