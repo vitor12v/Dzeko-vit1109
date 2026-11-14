@@ -1,0 +1,17 @@
+{
+  "name": "Dzeko · Assistente pessoal",
+  "short_name": "Dzeko",
+  "description": "Assistente pessoal por voz no estilo J.A.R.V.I.S.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050A13",
+  "theme_color": "#050A13",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
