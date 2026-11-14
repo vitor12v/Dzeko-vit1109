@@ -1,0 +1,41 @@
+name: App Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Compilar o APK
+        working-directory: android
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Publicar o APK para download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk Dzeko.apk
+          gh release create "v1.0.${{ github.run_number }}" Dzeko.apk \
+            --title "Dzeko para Android 1.0.${{ github.run_number }}" \
+            --notes "Baixe o Dzeko.apk e toque para instalar. Cada versão nova instala por cima da anterior, sem perder nada." \
+            --latest

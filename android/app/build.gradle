@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1") as Integer
+
+android {
+    namespace 'br.com.dzeko.jarvis'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "br.com.dzeko.jarvis"
+        minSdk 26
+        targetSdk 34
+        versionCode runNumber
+        versionName "1.0." + runNumber
+    }
+
+    // Fixed key so every new APK installs as an update over the previous one.
+    signingConfigs {
+        dzeko {
+            storeFile file("../dzeko.keystore")
+            storePassword "dzeko-vit1109"
+            keyAlias "dzeko"
+            keyPassword "dzeko-vit1109"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.dzeko
+        }
+        debug {
+            signingConfig signingConfigs.dzeko
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}

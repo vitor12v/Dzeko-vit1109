@@ -388,6 +388,50 @@ form#ask{display:flex;gap:8px;align-items:center}
 (() => {
 "use strict";
 const $ = s => document.querySelector(s);
+/* ---------- Android app bridge: inside the Dzeko APK, commands run directly on the phone ---------- */
+const NATIVE = (window.DzekoAndroid && typeof window.DzekoAndroid.setAlarm === "function") ? window.DzekoAndroid : null;
+if (NATIVE){
+  const handlers = {};
+  window.__dzkNative = (ch, type, data) => { try { const h = handlers[ch]; if (h) h(type, data || {}); } catch {} };
+  /* the Android WebView has no speech recognition: use the phone's own recognizer with the same interface */
+  let srSeq = 0, srCur = null;
+  class NativeSR {
+    constructor(){ this.lang = "pt-BR"; this.continuous = false; this.interimResults = false; this.maxAlternatives = 1; this.id = ++srSeq; this._finals = []; }
+    start(){ srCur = this; this._finals = []; NATIVE.srStart(this.id, this.lang || "pt-BR", !!this.interimResults); }
+    stop(){ NATIVE.srStop(this.id); }
+    abort(){ NATIVE.srAbort(this.id); }
+  }
+  handlers.sr = (type, d) => {
+    const r = srCur; if (!r || d.id !== r.id) return;
+    if (type === "start"){ r.onstart && r.onstart(); }
+    else if (type === "result"){
+      const item = Object.assign([{ transcript: d.text || "", confidence: 1 }], { isFinal: !!d.final });
+      const results = r._finals.concat([item]);
+      if (d.final) r._finals.push(item);
+      r.onresult && r.onresult({ resultIndex: results.length - 1, results });
+    }
+    else if (type === "error"){ r.onerror && r.onerror({ error: d.error || "network" }); }
+    else if (type === "end"){ if (srCur === r) srCur = null; r.onend && r.onend(); }
+  };
+  window.SpeechRecognition = window.webkitSpeechRecognition = NativeSR;
+  /* phone voice through Android's text-to-speech */
+  let ttsSeq = 0; const ttsWait = {};
+  const synthNative = {
+    speaking: false, pending: false, paused: false,
+    getVoices(){ return [{ name: "Android pt-BR", lang: "pt-BR", default: true, localService: true, voiceURI: "android" }]; },
+    speak(u){ const id = "u" + (++ttsSeq); ttsWait[id] = u; synthNative.speaking = true; NATIVE.ttsSpeak(id, String(u.text || ""), +u.rate || 1, +u.pitch || 1); },
+    cancel(){ NATIVE.ttsStop(); const all = Object.values(ttsWait); for (const k in ttsWait) delete ttsWait[k]; synthNative.speaking = false; all.forEach(u => { try { u.onend && u.onend({}); } catch {} }); },
+    pause(){}, resume(){}, addEventListener(){}, removeEventListener(){}
+  };
+  handlers.tts = (type, d) => {
+    const u = ttsWait[d.id]; if (!u) return; delete ttsWait[d.id];
+    if (!Object.keys(ttsWait).length) synthNative.speaking = false;
+    const f = type === "error" ? (u.onerror || u.onend) : u.onend; try { f && f({}); } catch {}
+  };
+  try { Object.defineProperty(window, "speechSynthesis", { value: synthNative, configurable: true }); } catch { window.speechSynthesis = synthNative; }
+  if (!window.SpeechSynthesisUtterance) window.SpeechSynthesisUtterance = function(t){ this.text = t; this.rate = 1; this.pitch = 1; this.lang = "pt-BR"; this.volume = 1; };
+  handlers.cal = type => { if (type === "saved") addMsg("sys", "📅 Compromisso salvo na agenda do celular."); };
+}
 const ls = {
   get(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -701,7 +745,7 @@ function synthSay(text, gen){
   return new Promise(res => {
     if (!synth || gen !== speakGen){ res(); return; }
     const u = new SpeechSynthesisUtterance(text);
-    const v = phoneVoice(); if (v){ u.voice = v; u.lang = v.lang; } else u.lang = "pt-BR";
+    const v = NATIVE ? null : phoneVoice(); try { if (v){ u.voice = v; u.lang = v.lang; } else u.lang = "pt-BR"; } catch { u.lang = "pt-BR"; }
     u.rate = S.speed * .97; u.pitch = .86;
     let fin = false; const done = () => { if (fin) return; fin = true; lastSpeechEnd = Date.now(); res(); };
     u.onend = done; u.onerror = done;
@@ -781,8 +825,8 @@ function updateWakeUI(){
 }
 let heardT = null, preArmed = false;
 const showHeard = t => { clearTimeout(heardT); $("#heard").textContent = t ? "ouvi › " + t : ""; if (t) heardT = setTimeout(() => { $("#heard").textContent = ""; }, 5000); };
-async function holdScreen(){ try { if (wakeWanted && navigator.wakeLock && !wakeLock && document.visibilityState === "visible"){ wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch {} }
-function releaseScreen(){ try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
+async function holdScreen(){ if (NATIVE && wakeWanted) NATIVE.keepScreenOn(true); try { if (wakeWanted && navigator.wakeLock && !wakeLock && document.visibilityState === "visible"){ wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch {} }
+function releaseScreen(){ if (NATIVE) NATIVE.keepScreenOn(false); try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
 function fire(cmd){ armedUntil = 0; preArmed = false; showHeard(""); cmd = cmd.trim(); if (cmd.length >= 2) send(cmd); }
 function arm(ms){ armedUntil = Date.now() + ms; setPhase("armed"); }
 function handleFinal(txt){
@@ -901,7 +945,7 @@ function renderHistory(){
 function fmt(ms){ const s = Math.max(0, Math.ceil(ms / 1000)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), r = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(r).padStart(2, "0"); }
 const timerText = (t, now) => /^⏰/.test(t.label) ? `${t.label} · ${new Date(t.end).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : `${t.label} · ${fmt(t.end - now)}`;
 const saveTimers = () => ls.set("dzk.timers", timers.map(t => ({ id: t.id, end: t.end, label: t.label })));
-function addTimer(sec, label, end){ const t = { id: Math.random().toString(36).slice(2), end: end || Date.now() + sec * 1000, label: label || "Timer" }; timers.push(t); timers.sort((a, b) => a.end - b.end); saveTimers(); renderTimers(); askNotify(); return t; }
+function addTimer(sec, label, end){ const e0 = end || Date.now() + sec * 1000; const dup = timers.find(x => x.label === (label || "Timer") && Math.abs(x.end - e0) < 60000); if (dup) return dup; const t = { id: Math.random().toString(36).slice(2), end: end || Date.now() + sec * 1000, label: label || "Timer" }; timers.push(t); timers.sort((a, b) => a.end - b.end); saveTimers(); renderTimers(); askNotify(); return t; }
 function askNotify(){ try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {}); } catch {} }
 function notify(title, body){ try { if (document.visibilityState === "hidden" && "Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: "icon-192.png", tag: "dzk-" + title, renotify: true }); } catch {} }
 function renderTimers(){
@@ -1002,27 +1046,45 @@ function buildAction(kind, arg){
   return null;
 }
 function runActions(raw){
-  const links = []; let blocked = false;
+  const links = []; let blocked = false, did = 0;
+  const done = new Set();
   let m; ACTION_RE.lastIndex = 0;
   while ((m = ACTION_RE.exec(raw))){
     const kind = m[1].toLowerCase(), arg = m[2];
+    const key = kind + ":" + norm(arg); if (done.has(key)) continue; done.add(key);   /* the same command twice runs once */
     if (kind === "timer"){
       const [a, ...rest] = arg.split("|"); const s = Math.round(parseFloat(a));
-      if (s > 0 && s <= 86400) addTimer(s, (rest.join("|").trim() || "Timer").slice(0, 30));
+      const label = (rest.join("|").trim() || "Timer").slice(0, 30);
+      if (s > 0 && s <= 86400){
+        did++;
+        if (NATIVE && NATIVE.setTimer(s, label)) addMsg("sys", `⏱ Timer de ${fmt(s * 1000)} iniciado no relógio do celular: ${label}`);
+        else addTimer(s, label);
+      }
     } else if (kind === "alarme"){
       const [a, ...rest] = arg.split("|"); const hm = a.trim().match(/(\d{1,2})\s*[:h]\s*(\d{2})?/);
       if (hm){
         const h = +hm[1], mi = +(hm[2] || 0);
         if (h < 24 && mi < 60){
           const at = new Date(); at.setHours(h, mi, 0, 0); if (at.getTime() <= Date.now() + 5000) at.setDate(at.getDate() + 1);
-          addTimer(0, ("⏰ " + (rest.join("|").trim() || `Alarme ${pad(h)}:${pad(mi)}`)).slice(0, 34), at.getTime());
+          const label = (rest.join("|").trim() || `Alarme ${pad(h)}:${pad(mi)}`).slice(0, 32);
+          did++;
+          if (NATIVE && NATIVE.setAlarm(h, mi, label)) addMsg("sys", `⏰ Alarme das ${pad(h)}:${pad(mi)} criado no relógio do celular: ${label}`);
+          else addTimer(0, ("⏰ " + label).slice(0, 34), at.getTime());
         }
       }
     } else if (kind === "cancelar_timer"){
       const q = norm(arg); const i = timers.findIndex(t => !q || q === "todos" || norm(t.label).includes(q));
       if (q === "todos") timers.length = 0; else if (i >= 0) timers.splice(i, 1);
       saveTimers(); renderTimers();
+    } else if (kind === "lanterna"){
+      did++; const on = !/deslig|apag|off|desat/i.test(arg);
+      if (!(NATIVE && NATIVE.torch(on))) hint("A lanterna só funciona no app Android do Dzeko.");
+    } else if (kind === "volume"){
+      did++; if (NATIVE){ const v = NATIVE.volume(arg.trim()); addMsg("sys", `🔊 Volume em ${v}%`); } else hint("O volume só pode ser mudado pelo app Android do Dzeko.");
+    } else if (kind === "ajustes"){
+      did++; if (!(NATIVE && NATIVE.openSettings(arg.trim()))) hint("Abrir os ajustes do celular só funciona no app Android do Dzeko.");
     } else if (kind === "nota"){
+      did++;
       const t = arg.trim().slice(0, 500); if (t){ notes.push({ t, at: Date.now() }); saveNotes(); }
     } else if (kind === "apagar_nota"){
       const n = parseInt(arg, 10) - 1; if (notes[n]){ notes.splice(n, 1); saveNotes(); }
@@ -1031,10 +1093,10 @@ function runActions(raw){
     } else {
       const l = buildAction(kind, arg);
       if (l && l.blocked) blocked = true;
-      else if (l && l.url && !links.some(x => x.url === l.url)) links.push(l);
+      else if (l && l.url && !links.some(x => x.url === l.url)){ l.kind = kind; l.parts = arg.split("|").map(x => x.trim()); links.push(l); }
     }
   }
-  return { links: links.slice(0, 3), blocked };
+  return { links: links.slice(0, 3), blocked, did };
 }
 /* "pesquisa no Google X", "procura X no Chrome", "dá um Google em X" → the search terms */
 function searchQuery(t){
@@ -1055,16 +1117,45 @@ function openLink(url){
   if (w){ try { w.opener = null; } catch {} return true; }
   return false;
 }
+/* runs one action on the phone; returns true if it went through */
+function nativeRun(l){
+  if (!NATIVE) return false;
+  const [a = "", b = "", c = ""] = l.parts || [];
+  try {
+    switch (l.kind){
+      case "app": { const opened = NATIVE.openApp(a); return opened ? true : NATIVE.openUrl(l.url); }
+      case "musica": return NATIVE.playMusic(a, /youtube/i.test(b) ? "youtube" : "spotify");
+      case "rota": return NATIVE.navigate(a, b);
+      case "ligar": { const r = NATIVE.call(a); return r === "calling" || r === "asked"; }
+      case "agenda": {
+        const p = parseLocal(b); if (!p) return false;
+        const mins = Math.max(5, Math.min(1440, parseInt(c, 10) || 60));
+        let start = p.d.getTime(), end = start + mins * 60000;
+        if (p.allDay){ start = Date.UTC(p.d.getFullYear(), p.d.getMonth(), p.d.getDate()); end = start + 86400000; }
+        const r = NATIVE.addEvent(a, start, end, !!p.allDay);
+        if (r === "saved") addMsg("sys", `📅 "${a}" salvo na agenda do celular.`);
+        return r === "saved" || r === "asked";
+      }
+      default: return NATIVE.openUrl(l.url);
+    }
+  } catch { return false; }
+}
 let actT = null;
 function showActions(links, bubble){
   const bar = $("#actbar"); bar.innerHTML = ""; clearTimeout(actT);
   if (!links.length) return;
   const box = document.createElement("div"); box.className = "acts";
   for (const l of links){
-    const mk = () => { const b = document.createElement("button"); b.type = "button"; b.className = "act cut"; b.textContent = l.label; b.onclick = () => { if (openLink(l.url) !== false) bar.innerHTML = ""; else location.href = l.url; }; return b; };
+    const mk = () => { const b = document.createElement("button"); b.type = "button"; b.className = "act cut"; b.textContent = l.label; b.onclick = () => { if (NATIVE && nativeRun(l)){ bar.innerHTML = ""; return; } if (openLink(l.url) !== false) bar.innerHTML = ""; else location.href = l.url; }; return b; };
     box.append(mk()); bar.append(mk());
   }
   bubble.append(box); scrollDown();
+  if (NATIVE){
+    /* music first, then whatever should stay on screen (navigation, app, call) */
+    const run = links.filter(l => !l.soft).sort((x, y) => (x.kind === "musica" ? 0 : 1) - (y.kind === "musica" ? 0 : 1));
+    run.forEach((l, i) => setTimeout(() => nativeRun(l), 700 + i * 1500));
+    if (run.length){ bar.innerHTML = ""; return; }
+  }
   actT = setTimeout(() => { bar.innerHTML = ""; }, 90000);
   const act = navigator.userActivation;
   if (S.auto && links.length === 1 && !links[0].soft && act && act.isActive){ setTimeout(() => openLink(links[0].url), 900); }
@@ -1273,7 +1364,7 @@ ${curResearch.text}
 AÇÕES
 Você executa ações escrevendo comandos no FINAL da resposta, cada um em linha própria. Eles não são falados nem mostrados. Use só quando o usuário pedir ou quando for claramente o que ele quer.
 [[timer: SEGUNDOS | rótulo]] cria timer.
-[[alarme: HH:MM | rótulo]] cria alarme para o próximo horário HH:MM (toca com o ${S.name} aberto).
+[[alarme: HH:MM | rótulo]] cria alarme para o próximo horário HH:MM${NATIVE ? " no relógio do celular" : " (toca com o " + S.name + " aberto)"}. Um comando por alarme, nunca repita.
 [[cancelar_timer: parte do rótulo]] ou [[cancelar_timer: todos]].
 [[nota: texto]] guarda uma nota. [[apagar_nota: NÚMERO]] apaga.
 [[app: nome do app]] abre um app (ex.: WhatsApp, YouTube, Spotify, Instagram, Maps, Waze, Uber, iFood, Gmail, Netflix).
@@ -1288,7 +1379,10 @@ Você executa ações escrevendo comandos no FINAL da resposta, cada um em linha
 [[pesquisar: termos]] abre a pesquisa no Google pelo Chrome. Use SEMPRE que o usuário pedir para pesquisar, procurar, buscar ou "dar um Google", e diga que deixou a pesquisa aberta. Também use quando responder sobre notícias, preços, placares, pessoas, lugares, produtos ou qualquer fato da internet, para ele conferir as fontes: termos curtos e objetivos, como se digita no Google.
 [[agenda: título | AAAA-MM-DDTHH:MM | duração em minutos]] prepara um compromisso no Google Agenda. Calcule a data a partir de agora. Sem hora, use só AAAA-MM-DD.
 [[copiar: texto]] copia texto para a área de transferência.
-Para abrir apps, mensagens, ligações e agenda, o usuário confirma com um toque no botão que aparece, porque o Android exige isso. Então diga algo como "Preparado, é só tocar para enviar" em vez de afirmar que já enviou.
+${NATIVE ? `[[lanterna: liga]] ou [[lanterna: desliga]] controla a lanterna.
+[[volume: mais | menos | mudo | max | NÚMERO de 0 a 100]] muda o volume do celular.
+[[ajustes: wifi | bluetooth | internet | som | bateria | tela | localização | geral]] abre essa tela de ajustes.
+VOCÊ ESTÁ NO APP ANDROID DO ${S.name.toUpperCase()}: alarmes e timers são criados de verdade no relógio do celular, apps abrem sozinhos, a música começa a tocar, a navegação do Maps inicia, ligações são feitas na hora e compromissos vão direto para a agenda, tudo sem o usuário tocar em nada. Então confirme como feito ("Alarme das oito criado no seu relógio", "Ligando para…", "Navegação iniciada"). Exceção: no WhatsApp, SMS e e-mail a mensagem fica escrita e o usuário só toca em enviar, porque esses apps não deixam enviar sozinho; diga isso em meia frase.` : `Para abrir apps, mensagens, ligações e agenda, o usuário confirma com um toque no botão que aparece, porque o navegador do Android exige isso. Então diga algo como "Preparado, é só tocar" em vez de afirmar que já fez. Lanterna, volume, ajustes do celular e alarmes no relógio do sistema só funcionam no app Android do ${S.name}; se pedirem, diga isso com elegância e, para alarmes, crie o alarme interno mesmo assim.`}
 Sempre confirme em palavras o que fez. Nunca mencione colchetes nem comandos.
 
 LIMITES E SEGURANÇA
@@ -1505,7 +1599,7 @@ async function send(text){
     /* "search in Chrome": an explicit request always gets a Google search, even if the brain forgot the command */
     const sq = searchQuery(text);
     if (sq && !acts.links.some(l => /google\.com\/search/.test(l.url))) acts.links.unshift(buildAction("pesquisar", sq));
-    else if (S.gsearch && !acts.links.length && (lastMeta.sources.length || (curResearch && curResearch.tried))) acts.links.push(Object.assign(buildAction("pesquisar", (curResearch && curResearch.query) || text.slice(0, 120)), { label: "Conferir no Google", soft: true }));
+    else if (S.gsearch && !acts.did && !acts.links.length && (lastMeta.sources.length || (curResearch && curResearch.tried))) acts.links.push(Object.assign(buildAction("pesquisar", (curResearch && curResearch.query) || text.slice(0, 120)), { label: "Conferir no Google", soft: true }));
     /* a search the brain added on its own to an ordinary question is offered, not forced open */
     if (!sq) acts.links.forEach(l => { if (/google\.com\/search/.test(l.url)){ l.soft = true; l.label = "Conferir no Google"; } });
     bubble.className = "msg ai"; bubble.textContent = vis || "Feito.";
@@ -1520,7 +1614,7 @@ async function send(text){
     }
     showActions(acts.links, bubble);
     if (acts.blocked) addMsg("sys", "🔒 Protocolo de segurança: bancos, pagamentos, galeria e arquivos não são abertos pelo assistente.");
-    if (lastMeta.noWeb && curResearch && curResearch.tried) hint("Não achei nada online sobre isso agora. Deixei a pesquisa do Google pronta para você conferir.");
+    if (!acts.did && !acts.links.length && lastMeta.noWeb && curResearch && curResearch.tried) hint("Não achei nada online sobre isso agora. Deixei a pesquisa do Google pronta para você conferir.");
     turns.push({ role: "assistant", content: vis || "Feito." });
     saveChat();
     if (!vis) speak("Feito.");
