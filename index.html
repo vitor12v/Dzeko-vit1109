@@ -1266,7 +1266,7 @@ Responda como um briefing de JARVIS em 3 a 5 frases: saudação pela hora, clima
 CONTEXTO AGORA
 Data e hora: ${when} (formato máquina: ${iso}).
 ${telemetryText()}
-${curResearch && curResearch.text ? `PESQUISA NA INTERNET feita agora pelo próprio ${S.name} (dados reais e atuais). Use como fonte principal, resuma no seu estilo, cite o veículo de forma falada e breve quando importar, e não invente nada além disso:
+${curResearch && curResearch.text ? `PESQUISA NA INTERNET feita agora pelo próprio ${S.name} (dados reais e atuais). Use como fonte principal, resuma no seu estilo e cite o veículo de forma falada e breve quando importar. Copie nomes de pessoas, times, números e datas EXATAMENTE como aparecem abaixo; não troque nem complete com nomes da memória, e não invente nada além disso. As fontes já aparecem como links na tela do usuário: não diga que abriu nada.
 ${curResearch.text}
 ` : ""}${web ? "Você também tem a pesquisa do Google. Para notícias, placares, preços, cotações ou qualquer coisa sobre hoje que não esteja acima, pesquise antes de responder; nunca responda de memória sobre fatos atuais. Para o clima local, prefira a telemetria." : curResearch && curResearch.text ? "" : curResearch && curResearch.tried ? "A pesquisa automática não achou resultados para este pedido. Diga isso com naturalidade, responda o que souber deixando claro que pode estar desatualizado, e inclua [[pesquisar: termos]] para o usuário ver no Google. NUNCA diga que está sem internet ou sem conexão." : "Se pedirem fatos de hoje que não estejam acima, diga que não conferiu online e inclua [[pesquisar: termos]] para o usuário ver no Google. NUNCA diga que está sem internet ou sem conexão."}
 
