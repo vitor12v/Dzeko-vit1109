@@ -287,6 +287,7 @@ form#ask{display:flex;gap:8px;align-items:center;background:var(--surface);borde
     <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-3.5 2-5 1 1.5 2 2 2 2s-.5-4 1-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></g></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></g></symbol>
+    <symbol id="i-pc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></g></symbol>
     <symbol id="i-wave" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3"/><circle cx="12" cy="12" r="3.2"/></g></symbol>
   </defs>
 </svg>
@@ -332,6 +333,7 @@ form#ask{display:flex;gap:8px;align-items:center;background:var(--surface);borde
         <button class="tile" type="button" data-go="tarefas" data-seg="habits"><span class="ic" style="background:rgba(255,95,162,.14);color:var(--pink)"><svg><use href="#i-flame"/></svg></span><b>Hábitos</b><small id="tileHabits">Crie seu primeiro</small></button>
         <button class="tile" type="button" data-go="memoria"><span class="ic" style="background:rgba(155,123,255,.15);color:var(--violet)"><svg><use href="#i-brain"/></svg></span><b>Memória</b><small id="tileMem">0 lembranças</small></button>
         <button class="tile" type="button" data-go="tarefas" data-seg="routines"><span class="ic" style="background:rgba(242,193,78,.14);color:var(--warn)"><svg><use href="#i-sun"/></svg></span><b>Rotinas</b><small id="tileRoutines">Bom dia, Hora de dormir</small></button>
+        <button class="tile" type="button" data-go="ajustes" data-pc="1" style="grid-column:1/-1;min-height:0;flex-direction:row;align-items:center"><span class="ic" style="background:rgba(92,184,255,.14);color:var(--sky)"><svg><use href="#i-pc"/></svg></span><span style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0"><b>Meu PC</b><small id="tilePc">Conecte o computador para controlar por voz</small></span></button>
       </div>
       <div class="sugs" id="sugs">
         <button class="sug" type="button">Relatório da manhã</button>
@@ -411,6 +413,30 @@ form#ask{display:flex;gap:8px;align-items:center;background:var(--surface);borde
         <div id="connList" class="group" style="gap:6px"></div>
         <p class="muted" id="keyInfo"></p>
         <div class="btns"><button class="btn" id="keysBtn" type="button">Conectar ou trocar chaves</button></div>
+      </div>
+
+      <div class="card group" id="accCard">
+        <h3><span class="dot" style="background:rgba(142,219,90,.14);color:var(--ok)"><svg><use href="#i-check"/></svg></span>Acesso ao celular</h3>
+        <p class="muted" id="accIntro">Para eu fazer as coisas sozinho no celular. Bancos e galeria ficam sempre fora: o controle só enxerga o WhatsApp, e eu me recuso a abrir apps de banco e a galeria.</p>
+        <div class="conn" id="accRow"><i></i><span>Controle do celular<br><small class="muted">Enviar WhatsApp sozinho, bloquear a tela, print, voltar, tela inicial</small></span><button class="pill go" type="button" id="accOn">Ativar</button></div>
+        <div class="conn" id="ctRow"><i></i><span>Contatos<br><small class="muted">“Liga pra mãe”, “manda pro João…”</small></span><button class="pill go" type="button" id="ctOn">Permitir</button></div>
+        <small class="muted" id="accHelp">Se o Android disser “configuração restrita”: abra Configurações › Apps › Dzeko › ⋮ (canto de cima) › Permitir configurações restritas, e tente de novo.</small>
+      </div>
+
+      <div class="card group" id="pcCard">
+        <h3><span class="dot" style="background:rgba(92,184,255,.14);color:var(--sky)"><svg><use href="#i-pc"/></svg></span>Meu PC</h3>
+        <p class="muted">Controle o computador falando com o Dzeko: abrir apps e sites, música, volume, bloquear, desligar, print, digitar e mais. Os comandos vão criptografados com um código que só você tem.</p>
+        <div class="conn" id="pcState"><i></i><span id="pcStatus">Nenhum PC conectado</span></div>
+        <div id="pcPairBox" class="group" hidden style="gap:10px">
+          <ol class="muted" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+            <li>No computador (Windows), abra <b style="color:var(--fg)">vitor12v.github.io/Dzeko-vit1109/pc</b> e baixe o <b style="color:var(--fg)">Dzeko-PC.bat</b>.</li>
+            <li>Abra o arquivo. Se o Windows avisar, toque em <b style="color:var(--fg)">Mais informações › Executar assim mesmo</b>.</li>
+            <li>Digite este código na janela que abrir:</li>
+          </ol>
+          <div style="font:700 20px/1.2 ui-monospace,Menlo,monospace;letter-spacing:.06em;text-align:center;padding:14px;border-radius:12px;background:var(--surface-2);user-select:all" id="pcCode"></div>
+          <div class="btns"><button class="btn" type="button" id="pcCopy">Copiar código</button><button class="btn primary" type="button" id="pcTest2">Já digitei, testar</button></div>
+        </div>
+        <div class="btns"><button class="btn primary" type="button" id="pcPair">Conectar meu PC</button><button class="btn" type="button" id="pcTest" hidden>Testar conexão</button><button class="btn danger" type="button" id="pcUnpair" hidden>Desconectar</button></div>
       </div>
 
       <div class="card group">
@@ -585,7 +611,7 @@ if (NATIVE){
   let srSeq = 0, srCur = null;
   class NativeSR {
     constructor(){ this.lang = "pt-BR"; this.continuous = false; this.interimResults = false; this.maxAlternatives = 1; this.id = ++srSeq; this._finals = []; }
-    start(){ srCur = this; this._finals = []; NATIVE.srStart(this.id, this.lang || "pt-BR", !!this.interimResults); }
+    start(){ srCur = this; this._finals = []; if (typeof NATIVE.srStart2 === "function") NATIVE.srStart2(this.id, this.lang || "pt-BR", !!this.interimResults, !!this.continuous); else NATIVE.srStart(this.id, this.lang || "pt-BR", !!this.interimResults); }
     stop(){ NATIVE.srStop(this.id); }
     abort(){ NATIVE.srAbort(this.id); }
   }
@@ -1023,7 +1049,7 @@ function findWake(text){
   return null;
 }
 let wakeRec = null, wakeWanted = false, armedUntil = 0, pttActive = false, restartT = null, quickFails = 0, wakeStartedAt = 0, wakeLock = null, micBlocked = false;
-const MIC_BLOCKED = (location.protocol === "https:" || location.hostname === "localhost") ? "O microfone foi bloqueado. Toque no cadeado ao lado do endereço, permita o Microfone e tente de novo." : "O microfone não funciona com o Dzeko aberto como arquivo do celular: o Chrome bloqueia e não há como liberar. Hospede o Dzeko num endereço https (ex.: GitHub Pages) e abra por ele.";
+const MIC_BLOCKED = NATIVE ? "O microfone está bloqueado para o Dzeko. Abra Configurações › Apps › Dzeko › Permissões › Microfone e escolha Permitir." : (location.protocol === "https:" || location.hostname === "localhost") ? "O microfone foi bloqueado. Toque no cadeado ao lado do endereço, permita o Microfone e tente de novo." : "O microfone não funciona com o Dzeko aberto como arquivo do celular: o Chrome bloqueia e não há como liberar. Hospede o Dzeko num endereço https (ex.: GitHub Pages) e abra por ele.";
 function updateWakeUI(){
   $("#wakeBtn").setAttribute("aria-pressed", wakeWanted);
   $("#wakeTitle").textContent = wakeWanted ? `Escuta ligada · diga “${S.wakeWord}”` : "Ligar palavra de ativação";
@@ -1071,7 +1097,10 @@ function startWake(){
         else if (!preArmed && Date.now() >= armedUntil && findWake(txt)){ chime(); preArmed = true; arm(9000); }
       }
     };
-    r.onerror = e => { if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)){ micBlocked = true; stopWake(); hint(MIC_BLOCKED); } };
+    r.onerror = e => {
+      if (/^(not-allowed|service-not-allowed|language)$/.test(e.error)){ if (e.error === "not-allowed") micBlocked = true; stopWake(); hint(micError(e.error)); }
+      else if (e.error === "audio-capture" && quickFails > 3) hint(micError("audio-capture"));   /* keeps retrying; only explains if it persists */
+    };
     r.onend = () => {
       wakeRec = null;
       if (Date.now() - wakeStartedAt < 1500) quickFails++; else quickFails = 0;
@@ -1102,6 +1131,18 @@ function afterSpeech(){
 
 /* push to talk */
 let rec = null;
+function micError(code){
+  switch (code){
+    case "not-allowed": return MIC_BLOCKED;
+    case "service-not-allowed": return NATIVE ? "Este celular está sem o serviço de voz do Google. Instale ou atualize o app Google na Play Store, ou cole a chave da Groq para usar o Whisper." : MIC_BLOCKED;
+    case "audio-capture": return "O microfone está ocupado por outro app (ligação, gravador ou outro assistente). Feche-o e tente de novo.";
+    case "no-speech": return "Não ouvi nada. Toque no microfone e fale logo em seguida.";
+    case "network": return "O reconhecimento de voz falhou (internet fraca?). Tente de novo.";
+    case "language": return "O reconhecimento de voz deste celular não tem o português instalado. No app Google: Configurações › Voz › Idiomas › Português (Brasil).";
+    case "busy": return "O reconhecimento de voz estava ocupado. Tente de novo.";
+    default: return "";
+  }
+}
 /* push to talk with Whisper (Groq): records until you stop talking, then transcribes — understands like ChatGPT */
 let wrec = null;
 const WHISPER_JUNK = /amara\.org|legendas? pela|obrigad[oa] por assistir|inscreva-se|^\W*$/i;
@@ -1111,7 +1152,14 @@ async function whisperPTT(){
   if (wakeRec){ const w = wakeRec; wakeRec = null; w.onend = null; try { w.abort(); } catch {} }
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
-  catch { pttActive = false; micBlocked = true; hint(MIC_BLOCKED); return; }
+  catch (err){
+    pttActive = false;
+    if (err && /NotAllowed|Security/i.test(err.name)){ micBlocked = true; hint(MIC_BLOCKED); }
+    else if (err && /NotReadable|Abort/i.test(err.name)) hint(micError("audio-capture"));
+    else { S.whisperOffUntil = Date.now() + 10 * 60e3; save(); hint("Não consegui gravar para o Whisper; usei o reconhecimento normal. Toque no microfone de novo."); }
+    if (wakeWanted) restartT = setTimeout(startWake, 300);
+    return;
+  }
   const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) || "";
   let mr; try { mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); } catch { stream.getTracks().forEach(t => t.stop()); pttActive = false; return false; }
   const chunks = []; wrec = mr;
@@ -1168,7 +1216,7 @@ $("#mic").addEventListener("click", () => {
       for (const r of e.results) (r.isFinal ? (finalText += r[0].transcript) : (interim += r[0].transcript));
       $("#q").value = finalText || interim;
     };
-    rec.onerror = e => { if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)){ micBlocked = true; hint(MIC_BLOCKED); } };
+    rec.onerror = e => { const m = micError(e.error); if (m) hint(m); if (/not-allowed/.test(e.error)) micBlocked = true; };
     rec.onend = () => {
       $("#mic").setAttribute("aria-pressed", "false"); rec = null; pttActive = false;
       if (phase === "listening") setPhase("idle");
@@ -1355,6 +1403,107 @@ function refreshHome(){
   $("#musicSub").textContent = music0 ? (music0.app === "youtube" ? "YouTube Music" : "Spotify") + " · pedido " + new Date(music0.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "Diga “toca Coldplay”";
 }
 
+/* ---------- Phone access (Android app only) ---------- */
+function renderAccess(){
+  const card = $("#accCard");
+  if (!NATIVE || typeof NATIVE.accessEnabled !== "function"){
+    $("#accIntro").textContent = "Disponível no app Android do Dzeko: enviar WhatsApp sozinho, ligar pelo nome do contato, bloquear a tela, print e mais.";
+    $("#accRow").hidden = $("#ctRow").hidden = $("#accHelp").hidden = true; return;
+  }
+  const acc = !!NATIVE.accessEnabled(), ct = !!NATIVE.hasContacts();
+  $("#accRow").classList.toggle("on", acc); $("#ctRow").classList.toggle("on", ct);
+  $("#accOn").hidden = acc; $("#ctOn").hidden = ct; $("#accHelp").hidden = acc;
+}
+$("#accOn").onclick = () => { NATIVE && NATIVE.openAccessSettings(); };
+$("#ctOn").onclick = () => { NATIVE && NATIVE.requestContacts(); setTimeout(renderAccess, 4000); };
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") renderAccess(); });
+
+/* ---------- Meu PC: encrypted, signed commands to the Dzeko PC program, through ntfy.sh ---------- */
+const NTFY = "https://ntfy.sh";
+const PC_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+let pc = ls.get("dzk.pc", null), pcK = null;
+const te = s => new TextEncoder().encode(s);
+const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+const b64e = u8 => { let s = ""; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); };
+const b64d = s => Uint8Array.from(atob(s.trim()), c => c.charCodeAt(0));
+const fmtPcCode = c => "DZK-" + c.match(/.{1,4}/g).join("-");
+function newPcCode(){ const r = crypto.getRandomValues(new Uint8Array(20)); return [...r].map(x => PC_ALPHA[x & 31]).join(""); }
+async function pcKeys(){
+  if (!pc || !pc.code) return null;
+  if (pcK && pcK.code === pc.code) return pcK;
+  const sub = crypto.subtle;
+  const base = await sub.importKey("raw", te(pc.code), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const encRaw = await sub.sign("HMAC", base, te("enc")), macRaw = await sub.sign("HMAC", base, te("mac"));
+  pcK = {
+    code: pc.code,
+    topic: "dzk" + hex(await sub.digest("SHA-256", te(pc.code + "|topic"))).slice(0, 20),
+    aes: await sub.importKey("raw", encRaw, { name: "AES-CBC" }, false, ["encrypt", "decrypt"]),
+    mac: await sub.importKey("raw", macRaw, { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"])
+  };
+  return pcK;
+}
+async function pcSeal(k, obj){
+  const iv = crypto.getRandomValues(new Uint8Array(16));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-CBC", iv }, k.aes, te(JSON.stringify(obj))));
+  const ivct = new Uint8Array(16 + ct.length); ivct.set(iv); ivct.set(ct, 16);
+  const tag = new Uint8Array(await crypto.subtle.sign("HMAC", k.mac, ivct));
+  const all = new Uint8Array(ivct.length + 32); all.set(ivct); all.set(tag, ivct.length);
+  return b64e(all);
+}
+async function pcOpen(k, b64){
+  try {
+    const all = b64d(b64); if (all.length < 64) return null;
+    const ivct = all.slice(0, all.length - 32), tag = all.slice(all.length - 32);
+    if (!(await crypto.subtle.verify("HMAC", k.mac, tag, ivct))) return null;
+    const pt = await crypto.subtle.decrypt({ name: "AES-CBC", iv: ivct.slice(0, 16) }, k.aes, ivct.slice(16));
+    return JSON.parse(new TextDecoder().decode(pt));
+  } catch { return null; }
+}
+/* sends one command and waits for the PC's answer */
+async function pcSend(a, v, wait = 10000){
+  const k = await pcKeys(); if (!k) return { ok: false, msg: "Nenhum PC conectado. Vá em Ajustes › Meu PC." };
+  const id = Math.random().toString(36).slice(2, 10), since = Math.floor(Date.now() / 1000) - 1;
+  try { await fetch(`${NTFY}/${k.topic}`, { method: "POST", body: await pcSeal(k, { id, ts: Date.now(), a, v: String(v || "") }) }); }
+  catch { return { ok: false, msg: "Não consegui mandar o comando para o PC (sem internet?)." }; }
+  const t0 = Date.now();
+  while (Date.now() - t0 < wait){
+    await sleep(1200);
+    try {
+      const r = await fetch(`${NTFY}/${k.topic}r/json?poll=1&since=${since}`);
+      const lines = (await r.text()).split("\n").filter(Boolean);
+      for (const line of lines){
+        let ev; try { ev = JSON.parse(line); } catch { continue; }
+        if (ev.event !== "message") continue;
+        const o = await pcOpen(k, ev.message);
+        if (o && o.id === id){ pc.name = o.pc || pc.name; pc.seen = Date.now(); ls.set("dzk.pc", pc); renderPc(); return o; }
+      }
+    } catch {}
+  }
+  return { ok: false, msg: "O PC não respondeu. Ele está ligado, com a janela do Dzeko PC aberta?" };
+}
+function renderPc(){
+  const on = !!(pc && pc.code), paired = on && pc.seen;
+  $("#pcState").classList.toggle("on", !!paired);
+  $("#pcStatus").textContent = !on ? "Nenhum PC conectado" : paired ? `${pc.name || "PC"} conectado · respondeu ${new Date(pc.seen).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : "Aguardando o PC: digite o código no Dzeko PC";
+  $("#pcPairBox").hidden = !on || !!paired;
+  if (on) $("#pcCode").textContent = fmtPcCode(pc.code);
+  $("#pcPair").hidden = on; $("#pcTest").hidden = !on || !paired; $("#pcUnpair").hidden = !on;
+  $("#tilePc").textContent = !on ? "Conecte o computador para controlar por voz" : paired ? `${pc.name || "PC"} conectado` : "Esperando o código no PC";
+}
+$("#pcPair").onclick = () => { pc = { code: newPcCode() }; pcK = null; ls.set("dzk.pc", pc); renderPc(); };
+$("#pcCopy").onclick = () => { try { navigator.clipboard.writeText(fmtPcCode(pc.code)); $("#pcCopy").textContent = "Copiado"; setTimeout(() => $("#pcCopy").textContent = "Copiar código", 1500); } catch {} };
+const pcTestRun = async btn => {
+  const old = btn.textContent; btn.disabled = true; btn.textContent = "Testando…";
+  const r = await pcSend("ping", "", 15000);
+  btn.disabled = false; btn.textContent = old;
+  addMsg("sys", r.ok ? `💻 ${r.msg}` : `💻 ${r.msg}`); hint(r.ok ? "" : r.msg); renderPc();
+  if (r.ok) speak(`Conexão com o ${r.pc || "PC"} estabelecida, ${S.nick}.`);
+};
+$("#pcTest").onclick = () => pcTestRun($("#pcTest"));
+$("#pcTest2").onclick = () => pcTestRun($("#pcTest2"));
+$("#pcUnpair").onclick = () => { pc = null; pcK = null; ls.set("dzk.pc", null); renderPc(); };
+document.querySelector('[data-pc="1"]').addEventListener("click", () => setTimeout(() => $("#pcCard").scrollIntoView({ behavior: "smooth", block: "start" }), 50));
+
 /* ---------- Views ---------- */
 let view = "inicio";
 function showView(v){
@@ -1422,8 +1571,10 @@ setInterval(() => {
 }, 500);
 
 /* ---------- Actions the brain can trigger ---------- */
-const ACTION_RE = /\[\[\s*([a-z_]+)\s*:\s*([^\]]*?)\s*\]\]/gi;
-const visible = s => s.replace(/\[\[[^\]]*\]\]/g, "").replace(/\[\[[^\]]*$/, "").replace(/\[$/, "").replace(/\n{3,}/g, "\n\n").trim();
+const ACTION_KINDS = "timer|alarme|cancelar_timer|nota|memoria|apagar_nota|tarefa|concluir_tarefa|habito_feito|habito|rotina|musica_controle|musica|app|site|whatsapp|ligar|sms|email|rota|mapa|youtube|pesquisar|agenda|copiar|lanterna|volume|ajustes|celular|pc";
+/* [[comando: ...]] — also accepts a single bracket, which some models write */
+const ACTION_RE = new RegExp("\\[\\[?\\s*(" + ACTION_KINDS + ")\\s*:\\s*([^\\]\\n]*?)\\s*\\]\\]?", "gi");
+const visible = s => s.replace(/\[\[[^\]]*\]\]/g, "").replace(new RegExp("\\[\\s*(?:" + ACTION_KINDS + ")\\s*:[^\\]\\n]*\\]", "gi"), "").replace(/\[\[[^\]]*$/, "").replace(/\[$/, "").replace(/\n{3,}/g, "\n\n").trim();
 const enc = encodeURIComponent;
 /* apps open through their official web links, which Android hands to the installed app */
 const APPS = {
@@ -1471,10 +1622,15 @@ function buildAction(kind, arg){
       try { const p = new URL(u); if (p.protocol !== "https:" && p.protocol !== "http:") return null; if (BLOCKED_HOST.test(p.hostname)) return { blocked: true }; p.protocol = "https:"; return { label: `Abrir ${p.hostname.replace(/^www\./, "")}`, url: p.href }; } catch { return null; }
     }
     case "whatsapp": {
-      const hasNum = digits(a).length >= 8; const num = hasNum ? phoneBR(a) : ""; const msg = hasNum ? b : parts.join(" | ").trim();
-      return { label: "Enviar no WhatsApp", url: `https://wa.me/${num}${msg ? "?text=" + enc(msg) : ""}` };
+      const hasNum = digits(a).length >= 8, named = !hasNum && parts.length >= 2;
+      const num = hasNum ? phoneBR(a) : ""; const msg = hasNum || named ? parts.slice(1).join(" | ").trim() : parts.join(" | ").trim();
+      return { label: named ? `WhatsApp para ${a}` : "Enviar no WhatsApp", url: `https://wa.me/${num}${msg ? "?text=" + enc(msg) : ""}`, contact: named ? a : "", msg };
     }
-    case "ligar": { const d = digits(a); if (d.length < 3) return null; return { label: `Ligar ${a}`, url: `tel:${a.trim().startsWith("+") ? "+" : ""}${d}` }; }
+    case "ligar": {
+      const d = digits(a);
+      if (d.length >= 3) return { label: `Ligar ${a}`, url: `tel:${a.trim().startsWith("+") ? "+" : ""}${d}` };
+      return a ? { label: `Ligar para ${a}`, url: "tel:", contact: a } : null;
+    }
     case "sms": { const d = digits(a); return { label: "Enviar SMS", url: `sms:${d}${b ? "?body=" + enc(b) : ""}` }; }
     case "email": return { label: "Escrever e-mail", url: `mailto:${enc(a).replace(/%40/g, "@")}?subject=${enc(b)}&body=${enc(c)}` };
     case "rota": return a ? { label: "Iniciar rota", url: `https://www.google.com/maps/dir/?api=1&destination=${enc(a)}&travelmode=${/a pé|andando|caminhando/i.test(b) ? "walking" : /bike|bicicleta/i.test(b) ? "bicycling" : /ônibus|metrô|transporte/i.test(b) ? "transit" : "driving"}` } : null;
@@ -1525,6 +1681,10 @@ function runActions(raw){
       const q = norm(arg); const i = timers.findIndex(t => !q || q === "todos" || norm(t.label).includes(q));
       if (q === "todos") timers.length = 0; else if (i >= 0) timers.splice(i, 1);
       saveTimers(); renderTimers();
+    } else if (kind === "celular"){
+      did++; const what = norm(arg);
+      const ok = NATIVE && typeof NATIVE.globalAction === "function" && NATIVE.globalAction(what);
+      if (!ok) hint(NATIVE ? "Para isso, ative o controle do celular em Ajustes › Acesso ao celular." : "Essa ação só funciona no app Android do Dzeko.");
     } else if (kind === "lanterna"){
       did++; const on = !/deslig|apag|off|desat/i.test(arg);
       if (!(NATIVE && NATIVE.torch(on))) hint("A lanterna só funciona no app Android do Dzeko.");
@@ -1547,6 +1707,11 @@ function runActions(raw){
     } else if (kind === "habito_feito"){
       did++; const q = norm(arg); const h = habits.find(x => norm(x.name).includes(q) || q.includes(norm(x.name)));
       if (h && !h.days.includes(dayKey())){ h.days.push(dayKey()); xp(15); saveHabits(); }
+    } else if (kind === "pc"){
+      did++;
+      const [pa = "", ...pv] = arg.split("|").map(x => x.trim());
+      if (!pc || !pc.code){ hint("Para controlar o computador, conecte o PC em Ajustes › Meu PC."); }
+      else pcSend(pa, pv.join(" | ")).then(r => { addMsg("sys", `💻 ${r.msg}`); if (!r.ok) speak(r.msg); else if (/^status$/i.test(pa)) speak(r.msg); });
     } else if (kind === "rotina"){
       did++; const r = findRoutine(arg); if (r) setTimeout(() => runRoutine(r), 1200);
     } else if (kind === "musica_controle"){
@@ -1589,10 +1754,25 @@ function nativeRun(l){
   const [a = "", b = "", c = ""] = l.parts || [];
   try {
     switch (l.kind){
-      case "app": { const opened = NATIVE.openApp(a); return opened ? true : NATIVE.openUrl(l.url); }
+      case "app": {
+        const opened = NATIVE.openApp(a);
+        if (opened === "__blocked__"){ addMsg("sys", "🔒 Por segurança, eu não abro apps de banco nem a galeria."); return true; }
+        return opened ? true : NATIVE.openUrl(l.url);
+      }
       case "musica": return NATIVE.playMusic(a, /youtube/i.test(b) ? "youtube" : "spotify");
       case "rota": return NATIVE.navigate(a, b);
-      case "ligar": { const r = NATIVE.call(a); return r === "calling" || r === "asked"; }
+      case "ligar": {
+        const r = NATIVE.call(a);
+        if (r === "notfound") addMsg("sys", `📇 Não achei “${a}” nos seus contatos.`);
+        return r === "calling" || r === "asked";
+      }
+      case "whatsapp": {
+        if (typeof NATIVE.whatsapp !== "function") return NATIVE.openUrl(l.url);
+        const r = NATIVE.whatsapp(l.contact || (digits(a).length >= 8 ? a : ""), l.msg || "");
+        if (r === "notfound"){ addMsg("sys", `📇 Não achei “${l.contact}” nos seus contatos. Escolha o contato no WhatsApp.`); return NATIVE.openUrl(l.url); }
+        if (r === "opened") addMsg("sys", "💬 Mensagem escrita no WhatsApp. Ative o controle do celular em Ajustes para eu enviar sozinho.");
+        return r !== "failed";
+      }
       case "agenda": {
         const p = parseLocal(b); if (!p) return false;
         const mins = Math.max(5, Math.min(1440, parseInt(c, 10) || 60));
@@ -1612,6 +1792,7 @@ function showActions(links, bubble){
   if (!links.length) return;
   const box = document.createElement("div"); box.className = "acts";
   for (const l of links){
+    if (!NATIVE && l.kind === "ligar" && l.contact){ hint("Ligar pelo nome do contato funciona no app Android do Dzeko."); continue; }
     const mk = () => { const b = document.createElement("button"); b.type = "button"; b.className = "act cut"; b.textContent = l.label; b.onclick = () => { if (NATIVE && nativeRun(l)){ bar.innerHTML = ""; return; } if (openLink(l.url) !== false) bar.innerHTML = ""; else location.href = l.url; }; return b; };
     box.append(mk()); bar.append(mk());
   }
@@ -1685,6 +1866,134 @@ function telemetryText(){
   if (T.bat != null) out.push(`Bateria do aparelho: ${T.bat}%${T.charging ? ", carregando" : ""}.`);
   out.push(`Rede: ${netLabel()}.`);
   return out.join("\n");
+}
+
+/* ---------- Direct commands: understood here, run at once, no AI needed ---------- */
+const NUMW = { um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, quinze: 15, vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, noventa: 90 };
+const pickSay = a => a[Math.floor(Math.random() * a.length)];
+function liClean(t){
+  return String(t || "").trim().replace(/^(?:(?:ei|oi|ok|e ai)[,\s]+)?(?:(?:dzeko|dzeco|zico|zeko|deco|jarvis)[,\s!.]+)/i, "").replace(/^(?:por favor|pfv|pf)[,\s]+/i, "").replace(/[,\s]*(?:por favor|pfv)[.!?]*$/i, "").replace(/[.!?]+$/, "").trim();
+}
+function liNum(w){ const n = parseInt(w, 10); if (!isNaN(n)) return n; return NUMW[norm(w)] || 0; }
+/* "às 7", "7h30", "07:30", "sete e meia", "meio-dia", "10 da noite" → [h, m] */
+function liTime(s){
+  const t = norm(s).replace(/meio dia/g, "12 00").replace(/meia noite/g, "0 00");
+  const m = t.match(/\b(?:as|a|para as|pras|pra)?\s*(\d{1,2}|um|uma|duas|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze)\s*(?:h|horas?|:)?\s*(?:e\s+)?(\d{2}|meia|quinze|trinta|quarenta|vinte|dez|cinco)?(?:\s*minutos?)?(?:\s+(?:da|de)\s+(manha|tarde|noite|madrugada))?/);
+  if (!m) return null;
+  let h = liNum(m[1]); if (h > 23) return null;
+  let mi = m[2] ? (m[2] === "meia" ? 30 : liNum(m[2])) : 0; if (mi > 59) return null;
+  if (/\b(da|de) (tarde|noite)\b/.test(t) && h < 12) h += 12;
+  return [h, mi];
+}
+function liDuration(s){
+  const t = norm(s).replace(/meia hora/g, "30 minutos").replace(/uma hora e meia/g, "90 minutos");
+  let total = 0, found = false;
+  const re = /(\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|quinze|vinte|trinta|quarenta|cinquenta|sessenta|noventa)\s*(segundos?|seg|s|minutos?|min|m|horas?|h)\b/g;
+  let m; while ((m = re.exec(t))){ found = true; const n = liNum(m[1]); const u = m[2][0]; total += u === "h" ? n * 3600 : u === "m" ? n * 60 : n; }
+  if (!found && /\b(meio minuto)\b/.test(t)){ total = 30; found = true; }
+  return found ? total : 0;
+}
+const liCap = s => s.replace(/\s+/g, " ").trim().replace(/^./, c => c.toUpperCase());
+function localIntent(raw){
+  const text = liClean(raw), n = norm(text);
+  if (!n || n.length > 140) return null;
+  if (/\b(no|do|pelo|na) (pc|computador|notebook)\b/.test(n)) return null;            /* PC requests go to the brain */
+  const nick = S.nick || "senhor";
+
+  /* music controls */
+  if (/^(pausa|pausar|pause|para a musica|pare a musica|parar a musica|pausa a musica|para de tocar|silencio na musica)\b/.test(n)) return { cmds: ["[[musica_controle: pausar]]"], say: pickSay(["Pausado.", `Música pausada, ${nick}.`]) };
+  if (/^(proxima|pula|pular|passa|avanca)( (a )?(musica|faixa))?$|^(proxima|outra) musica$/.test(n)) return { cmds: ["[[musica_controle: próxima]]"], say: pickSay(["Próxima.", "Pulando."]) };
+  if (/^(volta|voltar|anterior)( (a|para a) )?(musica|faixa)?( anterior)?$|^musica anterior$/.test(n)) return { cmds: ["[[musica_controle: anterior]]"], say: "Voltando a anterior." };
+  if (/^(continua|continuar|despausa|retoma|volta a tocar|solta o som)( a musica)?$/.test(n)) return { cmds: ["[[musica_controle: tocar]]"], say: "Retomando." };
+
+  /* flashlight */
+  if (/\blanterna\b/.test(n)){
+    const off = /\b(desliga|desligar|apaga|apagar|desativa|tira)\b/.test(n);
+    return { cmds: [`[[lanterna: ${off ? "desliga" : "liga"}]]`], say: off ? "Lanterna desligada." : pickSay(["Lanterna ligada.", "Luz ligada, " + nick + "."]) };
+  }
+
+  /* volume */
+  if (/\b(volume|som)\b/.test(n) && /\b(aumenta|aumentar|sobe|mais alto|abaixa|abaixar|diminui|diminuir|mais baixo|maximo|max|mudo|muta|silencia|zera|em \d+|\d+ ?%|\d+ por cento|no \d+)\b/.test(n) || /^(silencia|muta) o (celular|telefone)$/.test(n)){
+    let v = "mais";
+    const num = n.match(/(\d{1,3})\s*(%|por cento)?/);
+    if (/maximo|max\b|no talo/.test(n)) v = "max";
+    else if (/mudo|muta|silencia|zera/.test(n)) v = "mudo";
+    else if (num) v = String(Math.min(100, +num[1]));
+    else if (/abaixa|diminui|mais baixo/.test(n)) v = "menos";
+    return { cmds: [`[[volume: ${v}]]`], say: v === "max" ? "Volume no máximo." : v === "mudo" ? "Silêncio." : /\d/.test(v) ? `Volume em ${v} por cento.` : v === "menos" ? "Abaixei." : "Aumentei." };
+  }
+
+  /* phone screen actions */
+  if (/^(bloqueia|bloquear|trava|travar|tranca|desliga a tela|apaga a tela)( o)?( (celular|telefone|tela))?$/.test(n)) return { cmds: ["[[celular: bloquear]]"], say: "Bloqueando." };
+  if (/^(tira|tirar|faz|fazer|da) (um )?(print|captura|screenshot)/.test(n)) return { cmds: ["[[celular: print]]"], say: "Print feito." };
+  if (/^(volta|voltar)( a tela)?$/.test(n)) return { cmds: ["[[celular: voltar]]"], say: "" };
+  if (/^(vai para a |vai pra |volta pra |volta para a )?(tela inicial|tela de inicio|home)$/.test(n)) return { cmds: ["[[celular: inicio]]"], say: "" };
+  if (/^(abre|abrir|mostra|mostrar) (as )?notificacoes$/.test(n)) return { cmds: ["[[celular: notificacoes]]"], say: "" };
+  if (/^(abre|abrir|mostra|mostrar) (os )?(apps recentes|recentes)$/.test(n)) return { cmds: ["[[celular: recentes]]"], say: "" };
+
+  /* timer (before alarm: "timer de 5 minutos") */
+  if (/\b(timer|temporizador|cronometro|contagem regressiva)\b|^(me )?(avisa|lembra|chama)( me)? (daqui a|em|daqui) /.test(n)){
+    const sec = liDuration(n);
+    if (sec > 0 && sec <= 86400){
+      const lm = text.match(/\b(?:pr[oa]|para (?:o|a)?|pra)\s+(?!o tempo)(.{2,30})$/i);
+      const label = lm ? liCap(lm[1]) : "Timer";
+      const human = sec % 3600 === 0 ? `${sec / 3600} hora${sec > 3600 ? "s" : ""}` : sec % 60 === 0 ? `${sec / 60} minuto${sec > 60 ? "s" : ""}` : `${sec} segundos`;
+      return { cmds: [`[[timer: ${sec} | ${label}]]`], say: pickSay([`Timer de ${human} iniciado.`, `${human} no relógio, ${nick}.`]) };
+    }
+  }
+
+  /* alarm */
+  if (/\b(alarme|despertador|me acorda|me acorde|me desperta|acordar as|acorda me)\b/.test(n) && !/\b(cancela|apaga|tira|desliga|remove)\b/.test(n)){
+    const tm = liTime(n.replace(/^.*?\b(alarme|despertador|me acorda|me acorde|me desperta|acordar|acorda me)\b/, ""));
+    if (tm){
+      const [h, mi] = tm;
+      const lm = text.match(/\b(?:pra|para|pro)\s+(?!as\b|às\b)(?!\d)(.{3,40})$/i);
+      let label = lm && !/^\d|^(as|às) /i.test(lm[1]) ? liCap(lm[1].replace(/^(?:a |o )/i, "")) : "Alarme";
+      if (/^(as|às)\s/i.test(label)) label = "Alarme";
+      const hh = String(h).padStart(2, "0"), mm = String(mi).padStart(2, "0");
+      return { cmds: [`[[alarme: ${hh}:${mm} | ${label}]]`], say: pickSay([`Alarme das ${h}${mi ? " e " + mi : ""} criado, ${nick}.`, `Feito. Às ${h}${mi ? " e " + mi : ""} eu te chamo.`]) };
+    }
+  }
+
+  /* navigation */
+  let m = text.match(/^(?:me\s+leva|me\s+leve|leva\s+me|leve\s+me|navega|navegar|tra[çc]a\s+(?:a\s+)?rota|rota|como\s+(?:eu\s+)?chego|vamos)\s+(?:at[ée]\s+(?:a\s+|o\s+)?|para\s+(?:a\s+|o\s+)?|pra\s+|pro\s+|ao\s+|à\s+|no\s+|na\s+)(.{2,80})$/i);
+  if (m){
+    const dest = m[1].replace(/\s+(de|a|à)\s+(carro|p[ée]|bicicleta|bike|moto)$/i, "").replace(/\bmais (perto|pr[óo]ximo)\b/i, "").trim();
+    const mode = /\b(a pe|andando|caminhando)\b/.test(n) ? "a pé" : /\b(bicicleta|bike)\b/.test(n) ? "bicicleta" : /\bmoto\b/.test(n) ? "moto" : "";
+    return { cmds: [`[[rota: ${dest.replace(/\s+(a p[ée]|andando|caminhando)$/i, "")}${mode ? " | " + mode : ""}]]`], say: pickSay([`Rota traçada, ${nick}.`, "Navegação iniciada.", "A caminho. Siga as instruções do mapa."]) };
+  }
+
+  /* call */
+  m = text.match(/^(?:liga|ligar|ligue|telefona|telefone|chama)\s+(?:para|pra|pro|pr[oa]\s+)\s*(?:o\s+|a\s+)?(.{2,40})$/i);
+  if (m){
+    const who = m[1].replace(/\s+(agora|ai|aí)$/i, "").trim();
+    return { cmds: [`[[ligar: ${who}]]`], say: /\d{6,}/.test(who.replace(/\D/g, "")) ? "Ligando." : `Ligando para ${who}.` };
+  }
+
+  /* music: "toca Coldplay", "coloca uma música do AC/DC no Spotify", "quero ouvir Adele" */
+  m = text.match(/^(?:toca|tocar|toque|coloca|colocar|coloque|bota|botar|p[õo]e|p[õo]r|play|reproduz(?:ir)?|quero\s+ouvir|ouvir|solta)\s+(.*)$/i);
+  if (m && !/\b(alarme|timer|despertador|lembrete|volume)\b/i.test(m[1])){
+    let q = m[1], app = "spotify";
+    if (/\b(?:no|pelo|na)\s+youtube(?:\s+music)?\s*$/i.test(q)) app = "youtube";
+    q = q.replace(/\s+(?:no|pelo|na)\s+(?:spotify|youtube(?:\s+music)?)\s*$/i, "")
+         .replace(/^(?:a\s+|o\s+|uma\s+|um\s+|umas\s+|uns\s+)?(?:m[uú]sicas?|som|sons|playlist|banda|[áa]lbum|can[çc][ãa]o)\s*/i, "")
+         .replace(/^(?:d[aoe]s?|da\s+banda|do\s+cantor|da\s+cantora)\s+/i, "")
+         .replace(/\s+(?:pra|para)\s+(?:tocar|eu ouvir|mim|ouvir)$|\s+(?:a[ií]|agora|pra mim)$/i, "").trim();
+    if (!q || /^(algo|alguma coisa|qualquer coisa|qualquer|aleatori[ao]|ai|aí)$/i.test(q)) q = "Top Brasil";
+    return { cmds: [`[[musica: ${q}${app === "youtube" ? " | youtube" : ""}]]`], say: pickSay([`Tocando ${q}.`, `${q}, saindo agora.`, `Pode deixar. ${q} no ${app === "youtube" ? "YouTube Music" : "Spotify"}.`]) };
+  }
+
+  /* open app / settings */
+  m = text.match(/^(?:abre|abra|abrir|inicia|iniciar|entra\s+n[oa]|entrar\s+n[oa]|vai\s+n[oa]|vai\s+pr[oa]|abre\s+pra\s+mim)\s+(?:o\s+|a\s+|os\s+|as\s+|meu\s+|minha\s+)?(.{2,40})$/i);
+  if (m){
+    const app = m[1].replace(/\s+(pra mim|agora|ai|aí)$/i, "").trim();
+    const a = norm(app);
+    if (/^(wi ?fi|bluetooth|internet|dados moveis|ajustes de som|configuracoes de som|bateria|tela|brilho|localizacao|gps)$/.test(a)) return { cmds: [`[[ajustes: ${app}]]`], say: "" };
+    if (/^(configuracoes|ajustes|config)$/.test(a)) return { cmds: ["[[ajustes: geral]]"], say: "" };
+    if (/^(notificacoes)$/.test(a)) return { cmds: ["[[celular: notificacoes]]"], say: "" };
+    return { cmds: [`[[app: ${app}]]`], say: pickSay([`Abrindo ${app}.`, `${liCap(app)}, na tela.`]) };
+  }
+  return null;
 }
 
 /* ---------- Own web research: news, prices, facts — works without the Gemini search quota ---------- */
@@ -1836,6 +2145,7 @@ Você executa ações escrevendo comandos no FINAL da resposta, cada um em linha
 [[tarefa: texto]] põe na lista de tarefas. [[concluir_tarefa: NÚMERO ou parte do texto]] marca como feita.
 [[habito: nome]] cria um hábito para acompanhar todo dia. [[habito_feito: nome]] marca o hábito como feito hoje.
 [[rotina: nome]] roda uma rotina salva (lista abaixo).
+${pc && pc.code ? `COMPUTADOR DO USUÁRIO (${pc.name || "PC"}) conectado. Quando ele pedir algo "no PC", "no computador" ou "no notebook", use [[pc: AÇÃO | valor]] em vez das ações do celular. AÇÕES: abrir | nome do app · site | endereço · pesquisar | termos · youtube | busca · musica | artista ou música (abre a busca no Spotify do PC) · midia | tocar, pausar, próxima ou anterior · volume | mais, menos, mudo, max ou número 0-100 · bloquear · desligar · reiniciar · suspender · cancelar_desligamento · print · digitar | texto · copiar | texto · pasta | downloads, documentos, desktop, imagens · fechar | nome do app · status (bateria, processador, memória e disco do PC). Desligar e reiniciar têm 1 minuto para cancelar; confirme antes se o pedido não foi claro. A resposta do PC aparece na tela; diga só que mandou.` : `O computador do usuário ainda não está conectado; se ele pedir algo no PC, diga que dá para conectar em Ajustes › Meu PC.`}
 [[musica_controle: pausar | tocar | próxima | anterior]] controla a música que está tocando.
 [[app: nome do app]] abre um app (ex.: WhatsApp, YouTube, Spotify, Instagram, Maps, Waze, Uber, iFood, Gmail, Netflix).
 [[site: endereço]] abre um site.
@@ -1853,7 +2163,24 @@ ${NATIVE ? `[[lanterna: liga]] ou [[lanterna: desliga]] controla a lanterna.
 [[volume: mais | menos | mudo | max | NÚMERO de 0 a 100]] muda o volume do celular.
 [[ajustes: wifi | bluetooth | internet | som | bateria | tela | localização | geral]] abre essa tela de ajustes.
 VOCÊ ESTÁ NO APP ANDROID DO ${S.name.toUpperCase()}: alarmes e timers são criados de verdade no relógio do celular, apps abrem sozinhos, a música começa a tocar, a navegação do Maps inicia, ligações são feitas na hora e compromissos vão direto para a agenda, tudo sem o usuário tocar em nada. Então confirme como feito ("Alarme das oito criado no seu relógio", "Ligando para…", "Navegação iniciada"). Exceção: no WhatsApp, SMS e e-mail a mensagem fica escrita e o usuário só toca em enviar, porque esses apps não deixam enviar sozinho; diga isso em meia frase.` : `Para abrir apps, mensagens, ligações e agenda, o usuário confirma com um toque no botão que aparece, porque o navegador do Android exige isso. Então diga algo como "Preparado, é só tocar" em vez de afirmar que já fez. Lanterna, volume, ajustes do celular e alarmes no relógio do sistema só funcionam no app Android do ${S.name}; se pedirem, diga isso com elegância e, para alarmes, crie o alarme interno mesmo assim.`}
-Sempre confirme em palavras o que fez. Nunca mencione colchetes nem comandos.
+${NATIVE ? `[[celular: bloquear | print | voltar | inicio | recentes | notificacoes]] mexe na tela do celular.
+Ligações e WhatsApp aceitam o NOME do contato: [[ligar: Mãe]], [[whatsapp: João | chego em 10 minutos]]. Com o controle do celular ativo, a mensagem do WhatsApp é enviada sozinha.` : ""}
+REGRA DE OURO: uma ação só acontece se o comando estiver na resposta. Se você disser que tocou, abriu, criou ou ligou, o comando TEM de estar no final, em linha própria, com colchetes duplos. Sem comando, nada acontece e você terá mentido para o usuário.
+EXEMPLOS (siga exatamente este formato):
+Usuário: toca Coldplay
+Você: Tocando Coldplay, ${S.nick}.
+[[musica: Coldplay]]
+Usuário: me acorda às seis e meia pra academia
+Você: Alarme das seis e meia criado. A academia agradece.
+[[alarme: 06:30 | Academia]]
+Usuário: manda pro João que eu chego em 10 minutos
+Você: Mensagem para o João a caminho.
+[[whatsapp: João | Chego em 10 minutos]]
+Usuário: abre o Instagram e põe um timer de 20 minutos
+Você: Instagram aberto e 20 minutos no relógio, para o senhor não se perder no feed.
+[[app: Instagram]]
+[[timer: 1200 | Instagram]]
+Sempre confirme em palavras o que fez. Nunca mencione colchetes nem comandos para o usuário.
 
 LIMITES E SEGURANÇA
 - Você não lê mensagens, e-mails, fotos, arquivos nem a agenda do usuário; não controla casa inteligente nem toca em botões dentro de outros apps. Se pedirem, diga com elegância que esse módulo ainda não foi instalado e ofereça o que dá para fazer.
@@ -2072,6 +2399,23 @@ async function think(merged, onText, signal){
 async function send(text){
   text = text.trim();
   if (!text || busy) return;
+  /* simple commands run here and now, even without any AI key */
+  const li = localIntent(text);
+  if (li){
+    audio(); $("#q").value = ""; hint(""); ttsWarned = false; stopSpeech(); armedUntil = 0;
+    addMsg("user", text); xp(3); turns.push({ role: "user", content: text });
+    const acts = runActions(li.cmds.join("\n"));
+    let say = li.say || "Feito.";
+    if (acts.blocked) say = "Por segurança, eu não abro aplicativos de banco nem a galeria.";
+    else if (!NATIVE && acts.links.length) say = (li.say ? li.say + " " : "") + "Se não abrir sozinho, toque no botão.";
+    const bubble = addMsg("ai", say);
+    showActions(acts.links, bubble);
+    turns.push({ role: "assistant", content: say }); saveChat();
+    speak(say);
+    setChip("online", "Online");
+    if (!talking()) afterSpeech();
+    return;
+  }
   if (!hasBrain()){ openSetup(); return; }
   { const r = /^(?:(?:dzeko|zico|zeko|jarvis)[,\s]+)?(?:rotina|modo|protocolo)\s+/i.test(text) ? findRoutine(text.replace(/^(?:(?:dzeko|zico|zeko|jarvis)[,\s]+)/i, "")) : null;
     if (r && !routineRunning){ $("#q").value = ""; runRoutine(r); return; } }
@@ -2233,7 +2577,7 @@ function fillSettings(){
   for (const [n, k, d] of conn){ const row = document.createElement("div"); row.className = "conn" + (k ? " on" : ""); const i = document.createElement("i"); const s = document.createElement("span"); s.textContent = `${n} · ${d}`; const st = document.createElement("small"); st.className = "muted"; st.textContent = k ? "conectada" : "sem chave"; row.append(i, s, st); $("#connList").append(row); }
   $("#fUser").value = S.user || ""; $("#fWhisper").checked = !!S.whisper;
   document.querySelectorAll("#swatches .sw").forEach(b => b.setAttribute("aria-pressed", b.dataset.c === (S.accent || "verde")));
-  renderVoices();
+  renderVoices(); renderAccess(); renderPc();
 }
 $("#setBtn").onclick = () => showView("ajustes");
 const closePanel = () => { disarm(); showView("inicio"); };
@@ -2539,7 +2883,7 @@ function showBoot(){
 
 /* ---------- Boot ---------- */
 for (const t of ls.get("dzk.timers", [])) if (t && t.end > Date.now() - 60000) timers.push(t);
-apply(); renderNotes(); renderHistory(); renderTimers(); renderTelem(); renderTasks(); renderHabits(); renderRoutines(); refreshHome(); xp(0); showView("inicio"); setPhase("idle");
+apply(); renderNotes(); renderHistory(); renderTimers(); renderTelem(); renderTasks(); renderHabits(); renderRoutines(); refreshHome(); renderPc(); xp(0); showView("inicio"); setPhase("idle");
 const geoBoot = S.geo ? locate(false) : null;
 if (hasBrain() && S.boot) showBoot();
 if (!hasBrain()){ setChip("off", "Sem chave"); openSetup(false); }

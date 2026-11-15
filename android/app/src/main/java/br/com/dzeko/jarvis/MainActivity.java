@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
     static final String HOME = "https://vitor12v.github.io/Dzeko-vit1109/";
     static final String HOST = "vitor12v.github.io";
 
-    static final int REQ_MIC = 10, REQ_GEO = 11, REQ_CALL = 12, REQ_CAL = 13, REQ_START = 14;
+    static final int REQ_MIC = 10, REQ_GEO = 11, REQ_CALL = 12, REQ_CAL = 13, REQ_START = 14, REQ_CONTACTS = 15;
 
     WebView web;
     Bridge bridge;
@@ -150,6 +150,9 @@ public class MainActivity extends Activity {
                 break;
             case REQ_CAL:
                 bridge.onCalendarPermission(ok);
+                break;
+            case REQ_CONTACTS:
+                bridge.onContactsPermission(ok);
                 break;
             default:
                 break;

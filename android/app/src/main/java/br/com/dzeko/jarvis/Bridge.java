@@ -20,6 +20,7 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.provider.AlarmClock;
 import android.provider.CalendarContract;
+import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.speech.RecognitionListener;
@@ -36,6 +37,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
+import android.os.Handler;
+import android.os.Looper;
+import android.content.ComponentName;
 
 /**
  * Everything the assistant can do on the phone. Each method is called from the web app
@@ -55,6 +59,10 @@ public class Bridge {
     private final List<String[]> ttsQueue = new ArrayList<>();
 
     private String pendingCall;
+    private String[] pendingWhats;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private boolean srMuted = false;
+    private int srRetry = 0;
     private Object[] pendingEvent;
 
     Bridge(MainActivity activity) {
@@ -123,6 +131,22 @@ public class Bridge {
         return start(new Intent(AlarmClock.ACTION_SHOW_ALARMS));
     }
 
+    // ---------------------------------------------------------------- safety: no banks, no gallery
+
+    private static final String[] BLOCK_PKG = {"bank", "banco", "nubank", "com.nu.", "itau", "bradesco", "santander", "caixa", "br.com.bb", "intermedium",
+            "bancointer", "picpay", "mercadopago", "pagbank", "uol.ps", "pagseguro", "sicoob", "sicredi", "neon", "btg", "binance", "paypal", "c6bank",
+            "nubank", "gallery", "apps.photos", "huawei.photos", "miui.gallery", "photos.", "wallet", "carteira"};
+    private static final String[] BLOCK_WORD = {"banco", "bank", "nubank", "itau", "bradesco", "santander", "caixa", "picpay", "pagbank", "sicoob", "sicredi",
+            "galeria", "gallery", "fotos", "photos", "carteira", "wallet", "binance", "paypal"};
+
+    static boolean blocked(String pkg, String label) {
+        String p = pkg == null ? "" : pkg.toLowerCase(Locale.ROOT);
+        for (String b : BLOCK_PKG) if (p.contains(b)) return true;
+        String l = " " + norm(label) + " ";
+        for (String w : BLOCK_WORD) if (l.contains(" " + w + " ")) return true;
+        return false;
+    }
+
     // ---------------------------------------------------------------- apps & links
 
     /** Opens an installed app by its name ("WhatsApp", "Instagram", "Calculadora"...). Returns its real name, or "" if not found. */
@@ -135,6 +159,7 @@ public class Bridge {
         List<ResolveInfo> apps = pm.queryIntentActivities(launcher, 0);
         ResolveInfo best = null;
         int bestScore = 0;
+        if (blocked("", name)) return "__blocked__";
         for (ResolveInfo r : apps) {
             String label = norm(String.valueOf(r.loadLabel(pm)));
             String pkg = r.activityInfo.packageName.toLowerCase(Locale.ROOT);
@@ -146,6 +171,7 @@ public class Bridge {
             if (score > bestScore) { bestScore = score; best = r; }
         }
         if (best == null) return "";
+        if (blocked(best.activityInfo.packageName, String.valueOf(best.loadLabel(pm)))) return "__blocked__";
         Intent i = pm.getLaunchIntentForPackage(best.activityInfo.packageName);
         if (i == null) return "";
         return start(i) ? String.valueOf(best.loadLabel(pm)) : "";
@@ -163,6 +189,8 @@ public class Bridge {
     boolean openUri(Uri u) {
         String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase(Locale.ROOT);
         if (scheme.equals("intent")) return false; // never run raw intents coming from web pages
+        String host = u.getHost() == null ? "" : u.getHost();
+        if (blocked(host, "") || scheme.contains("bank")) return false;
         Intent i = new Intent(Intent.ACTION_VIEW, u);
         if (scheme.equals("mailto")) i = new Intent(Intent.ACTION_SENDTO, u);
         return start(i);
@@ -177,7 +205,11 @@ public class Bridge {
                 .putExtra(SearchManager.QUERY, query == null ? "" : query);
         if (installed(pkg)) {
             i.setPackage(pkg);
-            if (start(i)) return true;
+            if (start(i)) {
+                // some versions open the search and wait: a "play" key starts it (play never pauses)
+                main.postDelayed(() -> mediaKey("play"), 3500);
+                return true;
+            }
         }
         if (installed("com.spotify.music") && !"youtube".equalsIgnoreCase(app)) {
             return start(new Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:" + Uri.encode(query))));
@@ -227,7 +259,17 @@ public class Bridge {
     @JavascriptInterface
     public String call(String number) {
         String digits = number == null ? "" : number.replaceAll("[^0-9+]", "");
-        if (digits.length() < 3) return "invalid";
+        if (digits.replace("+", "").length() < 3) {
+            // a name: look it up in the contacts
+            if (!act.has(Manifest.permission.READ_CONTACTS)) {
+                pendingCall = "name:" + number;
+                act.ask(new String[]{Manifest.permission.READ_CONTACTS}, MainActivity.REQ_CONTACTS);
+                return "asked";
+            }
+            String found = findNumber(number);
+            if (found == null) return "notfound";
+            digits = found;
+        }
         if (act.has(Manifest.permission.CALL_PHONE)) {
             return start(new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + digits))) ? "calling" : "failed";
         }
@@ -236,11 +278,127 @@ public class Bridge {
         return "asked";
     }
 
+    void onContactsPermission(boolean ok) {
+        if (pendingCall != null && pendingCall.startsWith("name:")) {
+            String name = pendingCall.substring(5);
+            pendingCall = null;
+            if (ok) call(name);
+        }
+        if (pendingWhats != null) {
+            String[] w = pendingWhats;
+            pendingWhats = null;
+            whatsapp(ok ? w[0] : "", w[1]);
+        }
+        act.emit("perm", "contacts", "{\"ok\":" + ok + "}");
+    }
+
     void onCallPermission(boolean ok) {
         if (pendingCall == null) return;
         String n = pendingCall;
         pendingCall = null;
         start(new Intent(ok ? Intent.ACTION_CALL : Intent.ACTION_DIAL, Uri.parse("tel:" + n)));
+    }
+
+    // ---------------------------------------------------------------- WhatsApp
+
+    /** Opens the chat with the message written. With the control service on, it is sent by itself.
+     *  Returns: sending, opened, notfound, asked, failed. */
+    @JavascriptInterface
+    public String whatsapp(String contact, String message) {
+        String c = contact == null ? "" : contact.trim();
+        String num = "";
+        if (!c.isEmpty()) {
+            String d = c.replaceAll("[^0-9]", "");
+            if (d.length() >= 8) num = d;
+            else {
+                if (!act.has(Manifest.permission.READ_CONTACTS)) {
+                    pendingWhats = new String[]{c, message == null ? "" : message};
+                    act.ask(new String[]{Manifest.permission.READ_CONTACTS}, MainActivity.REQ_CONTACTS);
+                    return "asked";
+                }
+                String f = findNumber(c);
+                if (f == null) return "notfound";
+                num = f.replaceAll("[^0-9]", "");
+            }
+            if (num.startsWith("0")) num = num.replaceFirst("^0+", "");
+            if (num.length() == 10 || num.length() == 11) num = "55" + num;
+        }
+        String url = "https://api.whatsapp.com/send?" + (num.isEmpty() ? "" : "phone=" + num + "&") + "text=" + Uri.encode(message == null ? "" : message);
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        if (installed("com.whatsapp")) i.setPackage("com.whatsapp");
+        else if (installed("com.whatsapp.w4b")) i.setPackage("com.whatsapp.w4b");
+        boolean auto = DzekoAccess.instance != null && message != null && !message.trim().isEmpty();
+        if (auto) DzekoAccess.armSend(num.isEmpty() ? 30000 : 12000);
+        if (!start(i)) return "failed";
+        return auto ? "sending" : "opened";
+    }
+
+    /** Best phone number for a contact name ("Mãe", "João Silva"), or null. */
+    private String findNumber(String name) {
+        String want = norm(name);
+        if (want.isEmpty()) return null;
+        String best = null;
+        int bestScore = 0;
+        String[] proj = {ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY};
+        try (Cursor c = ctx.getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, proj, null, null, null)) {
+            if (c == null) return null;
+            while (c.moveToNext()) {
+                String n = norm(c.getString(0));
+                String number = c.getString(1);
+                if (n.isEmpty() || number == null) continue;
+                int score = 0;
+                if (n.equals(want)) score = 100;
+                else if (n.startsWith(want + " ")) score = 85;
+                else if ((" " + n + " ").contains(" " + want + " ")) score = 70;
+                else if (n.startsWith(want)) score = 55;
+                else if (n.contains(want)) score = 40;
+                if (score > 0 && c.getInt(2) == 1) score += 5;
+                if (score > bestScore) { bestScore = score; best = number; }
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return best;
+    }
+
+    @JavascriptInterface
+    public boolean hasContacts() {
+        return act.has(Manifest.permission.READ_CONTACTS);
+    }
+
+    @JavascriptInterface
+    public void requestContacts() {
+        act.ask(new String[]{Manifest.permission.READ_CONTACTS}, MainActivity.REQ_CONTACTS);
+    }
+
+    // ---------------------------------------------------------------- phone control (accessibility)
+
+    @JavascriptInterface
+    public boolean accessEnabled() {
+        if (DzekoAccess.instance != null) return true;
+        try {
+            String on = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            String me = new ComponentName(ctx, DzekoAccess.class).flattenToString();
+            String meShort = new ComponentName(ctx, DzekoAccess.class).flattenToShortString();
+            return on != null && (on.contains(me) || on.contains(meShort));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @JavascriptInterface
+    public void openAccessSettings() {
+        start(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+    }
+
+    /** voltar, inicio, recentes, notificacoes, bloquear, print */
+    @JavascriptInterface
+    public boolean globalAction(String what) {
+        DzekoAccess a = DzekoAccess.instance;
+        if (a == null) return false;
+        final boolean[] ok = {false};
+        try { ok[0] = a.global(what); } catch (Exception ignored) { }
+        return ok[0];
     }
 
     // ---------------------------------------------------------------- calendar
@@ -381,9 +539,15 @@ public class Bridge {
 
     // ---------------------------------------------------------------- speech recognition (the WebView has none)
 
+    /** continuous = the "Dzeko" wake loop (its start/stop beeps are muted); otherwise push-to-talk. */
     @JavascriptInterface
     public void srStart(final int id, final String lang, final boolean partial) {
-        act.runOnUiThread(() -> {
+        srStart2(id, lang, partial, false);
+    }
+
+    @JavascriptInterface
+    public void srStart2(final int id, final String lang, final boolean partial, final boolean continuous) {
+        main.post(() -> {
             if (!act.has(Manifest.permission.RECORD_AUDIO)) {
                 act.emit("sr", "error", "{\"id\":" + id + ",\"error\":\"not-allowed\"}");
                 act.emit("sr", "end", "{\"id\":" + id + "}");
@@ -395,57 +559,91 @@ public class Bridge {
                 act.emit("sr", "end", "{\"id\":" + id + "}");
                 return;
             }
-            if (recognizer == null) recognizer = SpeechRecognizer.createSpeechRecognizer(ctx);
-            else recognizer.cancel();
+            // a fresh recognizer every time: reusing one that is still closing gives "busy" errors
+            if (recognizer != null) {
+                try { recognizer.cancel(); recognizer.destroy(); } catch (Exception ignored) { }
+                recognizer = null;
+            }
+            if (!srEnded && srId != id) endSr(srId, null);
             srId = id;
             srEnded = false;
-            recognizer.setRecognitionListener(new Listener(id));
+            srRetry = 0;
+            main.postDelayed(() -> begin(id, lang, partial, continuous), 120);
+        });
+    }
+
+    private void begin(int id, String lang, boolean partial, boolean continuous) {
+        if (id != srId || srEnded) return;
+        try {
+            recognizer = SpeechRecognizer.createSpeechRecognizer(ctx);
+            recognizer.setRecognitionListener(new Listener(id, lang, partial, continuous));
             Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang == null || lang.isEmpty() ? "pt-BR" : lang)
+                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang == null || lang.isEmpty() ? "pt-BR" : lang)
                     .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, partial)
                     .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                    .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, ctx.getPackageName());
-            try {
-                recognizer.startListening(i);
-            } catch (Exception e) {
-                endSr(id, "network");
-            }
-        });
+                    .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, ctx.getPackageName())
+                    // don't cut you off after a short pause
+                    .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, continuous ? 1200 : 1800)
+                    .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, continuous ? 1200 : 1800)
+                    .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500);
+            if (continuous) mute(true);
+            recognizer.startListening(i);
+        } catch (Exception e) {
+            endSr(id, "network");
+        }
+    }
+
+    /** The recognizer's start/stop beep plays on the notification and system sounds: silenced only during the wake loop. */
+    private void mute(boolean on) {
+        if (on == srMuted) return;
+        try {
+            AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+            int dir = on ? AudioManager.ADJUST_MUTE : AudioManager.ADJUST_UNMUTE;
+            am.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, dir, 0);
+            am.adjustStreamVolume(AudioManager.STREAM_SYSTEM, dir, 0);
+            srMuted = on;
+        } catch (Exception ignored) { }
     }
 
     @JavascriptInterface
     public void srStop(final int id) {
-        act.runOnUiThread(() -> { if (recognizer != null && id == srId) recognizer.stopListening(); });
+        main.post(() -> { if (recognizer != null && id == srId) recognizer.stopListening(); });
     }
 
     @JavascriptInterface
     public void srAbort(final int id) {
-        act.runOnUiThread(() -> {
-            if (recognizer != null && id == srId) {
-                recognizer.cancel();
-                endSr(id, null);
-            }
+        main.post(() -> {
+            if (id != srId) return;
+            if (recognizer != null) { try { recognizer.cancel(); } catch (Exception ignored) { } }
+            endSr(id, null);
         });
     }
 
     void stopListening() {
         if (recognizer != null) {
-            recognizer.cancel();
+            try { recognizer.cancel(); } catch (Exception ignored) { }
             endSr(srId, null);
         }
+        mute(false);
     }
 
     private void endSr(int id, String error) {
         if (srEnded && id == srId) return;
-        srEnded = true;
+        if (id == srId) {
+            srEnded = true;
+            main.postDelayed(() -> { if (srEnded) mute(false); }, 400);
+        }
         if (error != null) act.emit("sr", "error", "{\"id\":" + id + ",\"error\":\"" + error + "\"}");
         act.emit("sr", "end", "{\"id\":" + id + "}");
     }
 
     private class Listener implements RecognitionListener {
         final int id;
-        Listener(int id) { this.id = id; }
+        final String lang;
+        final boolean partial, continuous;
+        Listener(int id, String lang, boolean partial, boolean continuous) { this.id = id; this.lang = lang; this.partial = partial; this.continuous = continuous; }
 
         private void result(Bundle b, boolean fin) {
             ArrayList<String> r = b == null ? null : b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
@@ -453,7 +651,10 @@ public class Bridge {
             act.emit("sr", "result", "{\"id\":" + id + ",\"final\":" + fin + ",\"text\":" + JSONObject.quote(r.get(0)) + "}");
         }
 
-        @Override public void onReadyForSpeech(Bundle params) { act.emit("sr", "start", "{\"id\":" + id + "}"); }
+        @Override public void onReadyForSpeech(Bundle params) {
+            act.emit("sr", "start", "{\"id\":" + id + "}");
+            if (continuous) main.postDelayed(() -> mute(false), 700);
+        }
         @Override public void onBeginningOfSpeech() { }
         @Override public void onRmsChanged(float rmsdB) { }
         @Override public void onBufferReceived(byte[] buffer) { }
@@ -467,6 +668,15 @@ public class Bridge {
         }
 
         @Override public void onError(int error) {
+            if (id != srId) return;
+            // the recognizer was still busy: try once more instead of failing
+            if ((error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) && srRetry < 2 && !srEnded) {
+                srRetry++;
+                try { if (recognizer != null) { recognizer.cancel(); recognizer.destroy(); } } catch (Exception ignored) { }
+                recognizer = null;
+                main.postDelayed(() -> begin(id, lang, partial, continuous), 400);
+                return;
+            }
             String e;
             switch (error) {
                 case SpeechRecognizer.ERROR_NO_MATCH:
@@ -474,6 +684,9 @@ public class Bridge {
                 case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: e = "not-allowed"; break;
                 case SpeechRecognizer.ERROR_AUDIO: e = "audio-capture"; break;
                 case SpeechRecognizer.ERROR_CLIENT: e = "aborted"; break;
+                case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: e = "busy"; break;
+                case SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED:
+                case SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE: e = "language"; break;
                 default: e = "network"; break;
             }
             endSr(id, e);
