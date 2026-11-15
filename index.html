@@ -501,11 +501,20 @@ form#ask{display:flex;gap:8px;align-items:center;background:rgba(3,10,18,.85);bo
           <select id="fEngine">
             <option value="auto">Automático (a melhor que estiver ligada)</option>
             <option value="eleven">ElevenLabs</option>
+            <option value="azure">Microsoft Azure (500 mil caracteres grátis por mês)</option>
             <option value="gemini">Google AI Studio (Gemini)</option>
+            <option value="own">Voz própria do Dzeko (grátis, sem limite, funciona offline)</option>
             <option value="phone">Voz do celular</option>
           </select>
           <small id="engineInfo"></small>
         </div>
+        <div class="field" id="ownBox"><label for="fOwnVoice">Voz própria do Dzeko</label><select id="fOwnVoice"></select>
+          <label class="toggle" for="fOwnOn" style="margin-top:8px"><span>Usar como reserva<small>Quando as vozes da nuvem falharem, ela fala antes da voz do celular. Baixa uma vez (cerca de 60 MB, de preferência no Wi-Fi) e depois funciona até sem internet.</small></span><input type="checkbox" id="fOwnOn"></label>
+          <div class="btns"><button class="btn" id="ownGet" type="button">Baixar agora</button></div><small id="ownInfo"></small></div>
+        <div class="field" id="azBox"><label for="fAzVoice">Voz da Microsoft</label><select id="fAzVoice"></select>
+          <label for="fAzKey" style="margin-top:8px">Chave do Azure Speech</label><input id="fAzKey" autocomplete="off" spellcheck="false" placeholder="cole a KEY 1">
+          <label for="fAzRegion" style="margin-top:8px">Região</label><input id="fAzRegion" autocomplete="off" spellcheck="false" placeholder="brazilsouth">
+          <small>Grátis: crie em portal.azure.com › Criar recurso › Speech › plano Free F0. Copie a KEY 1 e a região.</small></div>
         <button class="btn" id="testVoice" type="button">Ouvir a voz atual</button>
         <label class="toggle" for="fFx"><span>Efeito de IA de cinema<small>Grave mais presente, dicção brilhante e um leve eco metálico nas vozes da nuvem.</small></span><input type="checkbox" id="fFx"></label>
         <div class="field" id="fxBox"><label for="fFxAmt">Intensidade do efeito · <span id="fxVal"></span></label><input type="range" id="fFxAmt" min="0" max="100" step="5"></div>
@@ -737,7 +746,7 @@ const DEFAULT_VOICES = [
 let S = Object.assign({
   name: "Dzeko", nick: "senhor", voice: true, wake: false, wakeWord: "Dzeko", chime: true, follow: true, web: true,
   voiceId: DEFAULT_VOICES[0].voice_id, model: "eleven_flash_v2_5", stability: 55, speed: 1, gModel: "", gModels: [],
-  engine: "auto", gVoice: "Charon", gStyle: "jarvis", gTts: "",
+  engine: "auto", gVoice: "Charon", gStyle: "jarvis", gTts: "", ownVoice: "pt_BR-faber-medium", ownOn: true, azVoice: "pt-BR-AntonioNeural",
   fx: true, fxAmt: 55, geo: false, boot: true, auto: true, desc: "", gsearch: true,
   user: "", accent: "verde", brain: "auto", whisper: true, qModel: "", persona: "jarvis", alerts: true, interp: ""
 }, ls.get("dzk.settings", {}));
@@ -989,24 +998,100 @@ async function geminiTTS(text, gen, lang = "pt"){
     const e = new Error(last ? last.detail || ("HTTP " + last.status) : "tts_failed"); e.status = last && last.status; e.src = "gemini"; throw e;
   } finally { release(); }
 }
+/* ---------- Voz própria: Piper neural voice running inside the phone (free, unlimited, works offline) ---------- */
+const OWN_VOICES = [["pt_BR-faber-medium", "Faber · masculina, grave (recomendada)"], ["pt_BR-edresson-low", "Edresson · masculina, mais leve"]];
+const OWN_LIBS = [
+  "https://esm.sh/@diffusionstudio/vits-web@1.0.3?deps=onnxruntime-web@1.18.0",
+  "https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm"
+];
+let ownLib = null, ownLoading = null, ownReady = false, ownState = "";
+function ownLoad(){
+  if (ownLib) return Promise.resolve(ownLib);
+  if (ownLoading) return ownLoading;
+  ownLoading = (async () => {
+    let lastErr = null;
+    for (const u of OWN_LIBS){
+      try { const m = await import(u); if (m && typeof m.predict === "function"){ ownLib = m; return m; } }
+      catch (e){ lastErr = e; }
+    }
+    ownLoading = null; throw lastErr || new Error("não carregou o motor de voz");
+  })();
+  return ownLoading;
+}
+/* first use downloads the voice (~60 MB) once; after that it is stored in the phone */
+async function ownPrepare(progress){
+  const lib = await ownLoad();
+  const vid = S.ownVoice || OWN_VOICES[0][0];
+  try { const have = await lib.stored(); if (have && have.includes(vid)){ ownReady = true; ownState = "pronta"; return; } } catch {}
+  ownState = "baixando";
+  await lib.download(vid, p => { if (p && p.total){ ownState = `baixando ${Math.round(p.loaded * 100 / p.total)}%`; if (progress) progress(ownState); } });
+  ownReady = true; ownState = "pronta"; if (progress) progress(ownState);
+}
+let ownPrep = null;
+function ownWarm(){ if (!ownPrep) ownPrep = ownPrepare(t => { const el = $("#ownInfo"); if (el) el.textContent = "Voz própria: " + t + "."; }).catch(e => { ownPrep = null; ownState = "falhou: " + (e && e.message || e); const el = $("#ownInfo"); if (el) el.textContent = "A voz própria não carregou agora (" + String(e && e.message || e).slice(0, 80) + "). Tento de novo depois."; throw e; }); return ownPrep; }
+async function ownTTS(text, gen, lang = "pt"){
+  if (lang && lang !== "pt"){ const e = new Error("a voz própria só fala português"); e.status = 0; throw e; }
+  if (!ownReady){
+    ownWarm().catch(() => {});
+    const e = new Error(ownState && /baix/.test(ownState) ? "voz própria ainda " + ownState : "voz própria carregando"); e.status = 0; e.soft = true; throw e;
+  }
+  if (gen !== speakGen) throw new Error("cancelled");
+  const lib = await ownLoad();
+  const wav = await lib.predict({ text, voiceId: S.ownVoice || OWN_VOICES[0][0] });
+  if (gen !== speakGen) throw new Error("cancelled");
+  return await audio().decodeAudioData(await wav.arrayBuffer());
+}
+
+/* ---------- Microsoft Azure neural voices (free tier: 500 mil caracteres por mês) ---------- */
+const AZ_VOICES = [["pt-BR-AntonioNeural", "Antonio · masculina, firme"], ["pt-BR-MacerioMultilingualNeural", "Macério · masculina, muito natural"], ["pt-BR-DonatoNeural", "Donato · masculina, madura"], ["pt-BR-FabioNeural", "Fábio · masculina, calma"], ["pt-BR-JulioNeural", "Júlio · masculina, jovem"], ["pt-BR-FranciscaNeural", "Francisca · feminina"], ["pt-BR-ThalitaMultilingualNeural", "Thalita · feminina, muito natural"]];
+let AZ = Object.assign({ key: "", region: "brazilsouth" }, ls.get("dzk.azure", {}));
+const azOn = () => !!(AZ.key && AZ.region);
+const xmlEsc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+async function azureTTS(text, gen, lang = "pt"){
+  if (gen !== speakGen) throw new Error("cancelled");
+  const voice = S.azVoice || AZ_VOICES[0][0];
+  const xmlLang = lang && lang !== "pt" ? lang : "pt-BR";
+  const multi = /Multilingual/.test(voice);
+  const say = xmlEsc(text);
+  const inner = xmlLang !== "pt-BR" && multi ? `<lang xml:lang="${xmlLang}">${say}</lang>` : say;
+  const style = S.persona === "edith" ? "-4%" : S.persona === "sexta" ? "+4%" : "-2%";
+  const ssml = `<speak version="1.0" xml:lang="pt-BR"><voice name="${voice}"><prosody rate="${style}" pitch="${S.persona === "jarvis" ? "-6%" : "-2%"}">${inner}</prosody></voice></speak>`;
+  let r;
+  try {
+    r = await fetch(`https://${AZ.region}.tts.speech.microsoft.com/cognitiveservices/v1`, { method: "POST", headers: { "Ocp-Apim-Subscription-Key": AZ.key, "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": "audio-24khz-96kbitrate-mono-mp3" }, body: ssml });
+  } catch { const e = new Error("sem conexão com a Microsoft"); e.status = 0; throw e; }
+  if (!r.ok){ const e = new Error("Microsoft HTTP " + r.status); e.status = r.status; try { e.detail = await r.text(); } catch {} if (r.status === 403 || r.status === 429) e.detail = (e.detail || "") + (r.status === 403 ? " quota" : ""); throw e; }
+  if (gen !== speakGen) throw new Error("cancelled");
+  return await audio().decodeAudioData(await r.arrayBuffer());
+}
+
 function voiceEngine(){
   const e = S.engine;
   if (e === "phone") return "phone";
+  if (e === "own") return "own";
   if (e === "eleven" && K.e) return "eleven";
+  if (e === "azure" && azOn()) return "azure";
   if (e === "gemini" && K.g) return "gemini";
-  return K.e ? "eleven" : K.g ? "gemini" : "phone";
+  return K.e ? "eleven" : azOn() ? "azure" : K.g ? "gemini" : "own";
+}
+/* every voice that is switched on, the chosen one first; the phone's own voice only at the very end */
+function voiceOrder(){
+  const first = voiceEngine();
+  const avail = { eleven: !!K.e, azure: azOn(), gemini: !!K.g, own: S.ownOn !== false };
+  return [first, ...["eleven", "azure", "gemini", "own"].filter(x => x !== first)].filter(x => avail[x] || x === first);
 }
 const ttsCool = {}, ttsCoolErr = {};
 async function ttsAny(text, gen, lang = "pt"){
   const first = voiceEngine();
   if (first === "phone") return { local: true };
-  const order = first === "eleven" ? ["eleven", K.g && "gemini"] : ["gemini", K.e && "eleven"];
+  const order = voiceOrder();
   let firstErr = null; const all = [];
-  for (const eng of order.filter(Boolean)){
+  for (const eng of order){
     if (Date.now() < (ttsCool[eng] || 0)){ if (!firstErr) firstErr = ttsCoolErr[eng]; if (ttsCoolErr[eng]) all.push(ttsCoolErr[eng]); continue; }
-    try { return eng === "eleven" ? await elevenTTS(text, gen, lang) : await geminiTTS(text, gen, lang); }
+    try { return eng === "eleven" ? await elevenTTS(text, gen, lang) : eng === "azure" ? await azureTTS(text, gen, lang) : eng === "own" ? await ownTTS(text, gen, lang) : await geminiTTS(text, gen, lang); }
     catch (e){
       if (e && e.message === "cancelled") throw e; if (e) e.src = e.src || eng; if (!firstErr) firstErr = e; all.push(e);
+      if (e && e.soft) continue;   /* own voice still downloading: no cooldown */
       /* don't retry a failing voice on every sentence: quota rests for hours, rate limits for minutes */
       const d = String((e && (e.detail || e.message)) || "");
       const ms = /quota|credit|exceed|limit: ?0|per.?day/i.test(d) ? 6 * 3600e3 : (e && (e.status === 401 || e.status === 403)) ? 30 * 60e3 : (e && e.status === 429) ? 90e3 : 45e3;
@@ -1019,7 +1104,8 @@ async function ttsAny(text, gen, lang = "pt"){
 function ttsErrorText(e){
   const list = (e && e.all && e.all.length ? e.all : [e]).filter(Boolean);
   const say = x => {
-    const m = String(x.detail || x.message || ""), who = x.src === "gemini" ? "Google" : "ElevenLabs";
+    const m = String(x.detail || x.message || ""), who = { gemini: "Google", azure: "Microsoft", own: "Voz própria", eleven: "ElevenLabs" }[x.src] || "ElevenLabs";
+    if (x.src === "own") return `voz própria: ${m.replace(/^voz própria /, "")}`;
     if (/quota|credit|exceed/i.test(m)) return `${who}: cota acabou`;
     if (x.status === 401 || x.status === 403) return `${who}: chave recusada${/permission|missing/i.test(m) ? " (falta permissão Text to Speech)" : ""}`;
     if (x.status === 429) return `${who}: muitos pedidos agora`;
@@ -1099,7 +1185,8 @@ function feed(delta){
   feedBuf += delta;
   const re = /^[\s\S]*?[.!?…](?=\s)|^[\s\S]*?\n/;
   /* glue short sentences together for natural prosody; the Google voice gets longer chunks */
-  const min = voiceEngine() === "gemini" ? 160 : voiceEngine() === "eleven" ? 140 : 28;
+  const ve = voiceEngine();
+  const min = ve === "gemini" ? 160 : ve === "eleven" || ve === "azure" ? 140 : ve === "own" ? 70 : 28;
   for (;;){
     let chunk = "", rest = feedBuf, m;
     while ((m = rest.match(re))){ chunk += m[0]; rest = rest.slice(m[0].length); if (chunk.trim().length >= min || /\n/.test(m[0])) break; }
@@ -1855,7 +1942,7 @@ function watchTick(){
     }
   }
 }
-setInterval(watchTick, 60e3); setTimeout(watchTick, 8000); window.__dzkWatch = watchTick;
+setInterval(watchTick, 60e3); setTimeout(watchTick, 8000); window.__dzkWatch = watchTick; window.__dzkDbg = { ownTTS: (t) => ownTTS(t, speakGen), ownWarm: () => ownWarm(), deepSearch, webSearch, readPage };
 
 /* ---------- Interpreter mode ---------- */
 const LANGS = { ingles: ["inglês", "en"], espanhol: ["espanhol", "es"], frances: ["francês", "fr"], italiano: ["italiano", "it"], alemao: ["alemão", "de"], japones: ["japonês", "ja"], chines: ["chinês", "zh"], mandarim: ["chinês", "zh"], coreano: ["coreano", "ko"], russo: ["russo", "ru"], arabe: ["árabe", "ar"], portugues: ["português", "pt"] };
@@ -1950,7 +2037,7 @@ setInterval(() => {
 }, 500);
 
 /* ---------- Actions the brain can trigger ---------- */
-const ACTION_KINDS = "visao|timer|alarme|cancelar_timer|nota|memoria|apagar_nota|tarefa|concluir_tarefa|habito_feito|habito|rotina|musica_controle|musica|app|site|whatsapp|ligar|sms|email|rota|mapa|youtube|pesquisar|agenda|copiar|lanterna|volume|ajustes|celular|pc";
+const ACTION_KINDS = "buscar|ler|visao|timer|alarme|cancelar_timer|nota|memoria|apagar_nota|tarefa|concluir_tarefa|habito_feito|habito|rotina|musica_controle|musica|app|site|whatsapp|ligar|sms|email|rota|mapa|youtube|pesquisar|agenda|copiar|lanterna|volume|ajustes|celular|pc";
 /* [[comando: ...]] — also accepts a single bracket, which some models write */
 const ACTION_RE = new RegExp("\\[\\[?\\s*(" + ACTION_KINDS + ")\\s*:\\s*([^\\]\\n]*?)\\s*\\]\\]?", "gi");
 const visible = s => s.replace(/\[\[[^\]]*\]\]/g, "").replace(new RegExp("\\[\\s*(?:" + ACTION_KINDS + ")\\s*:[^\\]\\n]*\\]", "gi"), "").replace(/\[\[[^\]]*$/, "").replace(/\[$/, "").replace(/\n{3,}/g, "\n\n").trim();
@@ -2036,6 +2123,8 @@ function runActions(raw){
   while ((m = ACTION_RE.exec(raw))){
     const kind = m[1].toLowerCase(), arg = m[2];
     const key = kind + ":" + norm(arg); if (done.has(key)) continue; done.add(key);   /* the same command twice runs once */
+    if (kind === "buscar" || kind === "ler") continue;
+    if (!/^(memoria|nota|apagar_nota)$/.test(kind)) logAction(kind, arg);
     if (kind === "timer"){
       const [a, ...rest] = arg.split("|"); const s = Math.round(parseFloat(a));
       const label = (rest.join("|").trim() || "Timer").slice(0, 30);
@@ -2474,10 +2563,11 @@ async function research(text){
   const topic = explicit || topicOf(t);
   const core = topic.replace(/\b(not[ií]cias?|manchetes?|importantes?|principais|[uú]ltimas|mais|novidades|dia|hoje|agora|brasil|mundo|tem|alguma|algo|aí|ai)\b/gi, " ").replace(/\s+/g, " ").trim();
   const newsQ = core ? topic.replace(/\b(not[ií]cias?|manchetes?|[uú]ltimas|novidades)\b/gi, " ").replace(/\s+/g, " ").trim() : "";
-  const [n, f, w] = await Promise.all([
+  const [n, f, w, web] = await Promise.all([
     (wantsNews || wantsFact) && (!wantsFx || /not[ií]cia/i.test(t)) ? newsSearch(newsQ) : [],
     wantsFx ? quotes(t) : [],
-    wantsFact && core.length > 1 && !wantsFx ? wiki(core) : null
+    wantsFact && core.length > 1 && !wantsFx ? wiki(core) : null,
+    wantsFact && !wantsFx && core.length > 1 ? webSearch(topic) : []
   ]);
   const lines = [], sources = [];
   if (f.length){ lines.push("Cotações agora (AwesomeAPI):", ...f.map(x => "- " + x)); }
@@ -2487,7 +2577,106 @@ async function research(text){
     const seen = new Set(); n.forEach(x => { if (x.link && !seen.has(x.src) && sources.length < 4){ seen.add(x.src); sources.push({ title: x.src || "notícia", uri: x.link }); } });
   }
   if (w){ lines.push(`Wikipédia — ${w.title}: ${w.extract}`); sources.push({ title: "Wikipédia", uri: w.link }); }
+  if (web.length){ lines.push(`Resultados da web (Bing) para "${topic}":`); web.slice(0, 5).forEach(x => lines.push(`- ${x.title} — ${x.src}: ${x.desc}`)); if (sources.length < 4) sources.push({ title: web[0].src, uri: web[0].link }); }
   return { text: lines.join("\n"), sources, tried: true, query: newsQ || core || topic };
+}
+
+/* ---------- Deep research: the brain asks, Dzeko searches the web and reads pages ---------- */
+const TOOL_RE = /^\s*\[\[?\s*(buscar|ler)\s*:\s*([^\]\n]+?)\s*\]\]?/i;
+const TOOL_PREFIX = /^\s*\[{1,2}\s*(b(u(s(c(a(r)?)?)?)?)?|l(e(r)?)?)?\s*:?[^\]\n]*$/i;
+async function getText(u, ms = 9000, headers){
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try { const r = await fetch(u, { signal: ctl.signal, headers }); if (!r.ok) return ""; return await r.text(); } catch { return ""; } finally { clearTimeout(t); }
+}
+/* Bing web results (RSS), the same way the news search works */
+async function webSearch(q){
+  const j = await getJSON(RSS(`https://www.bing.com/search?q=${enc(q)}&format=rss&setlang=pt-BR&cc=BR&mkt=pt-BR`), 7000);
+  if (!j || !j.items) return [];
+  return j.items.slice(0, 6).map(i => {
+    let host = ""; try { host = new URL(i.link).hostname.replace(/^(www|m)\./, ""); } catch {}
+    return { title: String(i.title || "").trim(), link: i.link || "", src: host, desc: String(i.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300) };
+  }).filter(x => x.link);
+}
+/* reads a page as clean text (Jina Reader, free) */
+async function readPage(url, max = 3500){
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  const t = await getText("https://r.jina.ai/" + url, 12000, { "X-Return-Format": "text" });
+  return t.replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
+}
+/* Groq Compound: a search engine with a brain (web search + code), when the user has a Groq key */
+async function compoundSearch(q){
+  if (!K.q || Date.now() < (ls.get("dzk.cmpCool", 0) || 0)) return null;
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 25000);
+  try {
+    const r = await fetch(`${GQ}/chat/completions`, { method: "POST", signal: ctl.signal, headers: { Authorization: "Bearer " + K.q, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "groq/compound-mini", max_completion_tokens: 900, messages: [
+        { role: "system", content: `Hoje é ${new Date().toLocaleString("pt-BR")}. Pesquise na web e responda em português do Brasil com os fatos mais atuais: números, datas, nomes exatos e o nome das fontes. Seja factual e conciso. Se fizer conta, use código.` },
+        { role: "user", content: q }] }) });
+    if (!r.ok){ if (r.status === 429 || r.status === 413 || r.status === 400 || r.status === 404) ls.set("dzk.cmpCool", Date.now() + (r.status === 429 ? 10 * 60e3 : 6 * 3600e3)); return null; }
+    const j = await r.json(), msg = j.choices && j.choices[0] && j.choices[0].message;
+    const text = (msg && msg.content || "").trim(); if (!text) return null;
+    const sources = [];
+    try { for (const tl of msg.executed_tools || []) for (const s of ((tl.search_results && tl.search_results.results) || [])) if (s.url && sources.length < 4){ let h = ""; try { h = new URL(s.url).hostname.replace(/^www\./, ""); } catch {} sources.push({ title: h || s.title, uri: s.url }); } } catch {}
+    return { text: "Resposta pesquisada na web agora (Groq Compound):\n" + text, sources };
+  } catch { return null; } finally { clearTimeout(t); }
+}
+async function deepSearch(kind, arg){
+  const sources = [], lines = [];
+  if (kind === "ler"){
+    const page = await readPage(arg);
+    if (page){ lines.push(`Conteúdo da página ${arg}:\n${page}`); let h = arg; try { h = new URL(/^https?:/.test(arg) ? arg : "https://" + arg).hostname; } catch {} sources.push({ title: h, uri: /^https?:/.test(arg) ? arg : "https://" + arg }); }
+    return { text: lines.join("\n"), sources, tried: true, query: arg };
+  }
+  const c = await compoundSearch(arg);
+  if (c) return { text: c.text, sources: c.sources, tried: true, query: arg };
+  const [w, n] = await Promise.all([webSearch(arg), newsSearch(arg)]);
+  if (w.length){
+    lines.push(`Resultados da web para "${arg}" (Bing):`);
+    w.forEach(x => lines.push(`- ${x.title} — ${x.src}: ${x.desc}`));
+    /* open the best result and read it, like a person would */
+    const best = w.find(x => !/youtube\.com|facebook\.com|instagram\.com|tiktok\.com|x\.com|twitter\.com/.test(x.link));
+    if (best){ const page = await readPage(best.link, 3000); if (page) lines.push(`\nTexto da página mais relevante (${best.src}):\n${page}`); }
+    w.slice(0, 3).forEach(x => sources.push({ title: x.src, uri: x.link }));
+  }
+  if (n.length){
+    lines.push(`Notícias recentes sobre "${arg}":`);
+    n.slice(0, 5).forEach(x => lines.push(`- ${x.title} — ${x.src}${x.when ? ", " + x.when : ""}${x.desc ? ": " + x.desc : ""}`));
+    if (sources.length < 4 && n[0] && n[0].link) sources.push({ title: n[0].src || "notícia", uri: n[0].link });
+  }
+  return { text: lines.join("\n"), sources, tried: true, query: arg };
+}
+
+/* ---------- Long memory: summary of older conversations and a log of what Dzeko did ---------- */
+let convSummary = ls.get("dzk.summary", "") || "";
+let actLog = ls.get("dzk.actlog", []) || [];
+function logAction(kind, arg){
+  actLog.push({ t: Date.now(), k: kind, a: String(arg).slice(0, 80) }); actLog = actLog.slice(-15); ls.set("dzk.actlog", actLog);
+}
+function actLogText(){
+  const recent = actLog.filter(x => Date.now() - x.t < 36 * 3600e3);
+  if (!recent.length) return "";
+  return "O QUE VOCÊ FEZ RECENTEMENTE NO CELULAR (para responder \"cancela aquele alarme\", \"o que você fez\" etc.):\n" + recent.map(x => `- ${new Date(x.t).toLocaleString("pt-BR", { weekday: "short", hour: "2-digit", minute: "2-digit" })}: ${x.k} ${x.a}`).join("\n");
+}
+let summarizing = false;
+async function summarizeOld(){
+  if (summarizing || busy || turns.length < 36) return;
+  summarizing = true;
+  const old = turns.slice(0, turns.length - 24), keep = turns.slice(-24);
+  const text = old.map(t => (t.role === "user" ? "Usuário: " : "Assistente: ") + t.content).join("\n").slice(-12000);
+  const prompt = `Resuma esta conversa entre o usuário e o assistente pessoal dele em até 8 frases curtas, em português, guardando só o que vale lembrar depois: pedidos em andamento, decisões, planos, preferências reveladas, nomes, datas e números importantes. Sem introdução.\n\nResumo anterior: ${convSummary || "(nenhum)"}\n\nConversa:\n${text}`;
+  let out = "";
+  try {
+    if (K.q){
+      const r = await fetch(`${GQ}/chat/completions`, { method: "POST", headers: { Authorization: "Bearer " + K.q, "Content-Type": "application/json" }, body: JSON.stringify({ model: "llama-3.1-8b-instant", max_completion_tokens: 500, messages: [{ role: "user", content: prompt }] }) });
+      if (r.ok){ const j = await r.json(); out = (j.choices[0].message.content || "").trim(); }
+    }
+    if (!out && K.g){
+      const r = await fetch(`${G}/models/${S.gModel || "gemini-3.5-flash"}:generateContent`, { method: "POST", headers: gHeaders(), body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } } }) });
+      if (r.ok){ const j = await r.json(); out = ((j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || []).map(p => p.text || "").join("").trim(); }
+    }
+  } catch {}
+  if (out){ convSummary = out.slice(0, 1800); ls.set("dzk.summary", convSummary); turns = keep; saveChat(); }
+  summarizing = false;
 }
 
 /* ---------- Brain (Gemini) ---------- */
@@ -2537,6 +2726,14 @@ CONTEXTO AGORA
 Data e hora: ${when} (formato máquina: ${iso}).
 ${telemetryText()}
 ${agendaText()}
+${actLogText()}
+${convSummary ? "RESUMO DAS CONVERSAS ANTERIORES (memória de longo prazo):\n" + convSummary : ""}
+
+PESQUISA PROFUNDA (você mesmo pesquisa, como o JARVIS)
+- Se para responder bem você precisar de informação atual, específica ou que não esteja aqui (preço, notícia, horário de funcionamento, resultado, especificação de produto, receita, endereço, pessoa, lei, qualquer dado que possa ter mudado), responda APENAS com [[buscar: termos da busca]] e mais nada. O sistema pesquisa na internet, lê as páginas e chama você de novo com os resultados.
+- Se o usuário falar de um site ou link, responda APENAS com [[ler: endereço]].
+- ${toolHops >= 2 ? "ATENÇÃO: você já pesquisou o máximo nesta pergunta. Agora responda com o que tem, sem pedir outra busca." : "No máximo duas buscas por pergunta. Não peça busca para conversa casual, comandos do celular ou coisas que você sabe com certeza."}
+- Nunca diga que não consegue pesquisar ou que não tem acesso à internet.
 ${curResearch && curResearch.text ? `PESQUISA NA INTERNET feita agora pelo próprio ${S.name} (dados reais e atuais). Use como fonte principal, resuma no seu estilo e cite o veículo de forma falada e breve quando importar. Copie nomes de pessoas, times, números e datas EXATAMENTE como aparecem abaixo; não troque nem complete com nomes da memória, e não invente nada além disso. As fontes já aparecem como links na tela do usuário: não diga que abriu nada.
 ${curResearch.text}
 ` : ""}${web ? "Você também tem a pesquisa do Google. Para notícias, placares, preços, cotações ou qualquer coisa sobre hoje que não esteja acima, pesquise antes de responder; nunca responda de memória sobre fatos atuais. Para o clima local, prefira a telemetria." : curResearch && curResearch.text ? "" : curResearch && curResearch.tried ? "A pesquisa automática não achou resultados para este pedido. Diga isso com naturalidade, responda o que souber deixando claro que pode estar desatualizado, e inclua [[pesquisar: termos]] para o usuário ver no Google. NUNCA diga que está sem internet ou sem conexão." : "Se pedirem fatos de hoje que não estejam acima, diga que não conferiu online e inclua [[pesquisar: termos]] para o usuário ver no Google. NUNCA diga que está sem internet ou sem conexão."}
@@ -2612,7 +2809,7 @@ function geminiError(status, detail){
 }
 let lastMeta = { sources: [], noWeb: false };
 /* hard questions get more thinking and more room to answer */
-let curHard = false;
+let curHard = false, toolHops = 0;
 const isHard = t => String(t).length > 110 || /\b(explica|explique|por que|porque|analisa|analise|compare|compara|calcula|calcule|quanto (d[aá]|fica|custa no total)|planeja|planeje|plano|resuma|resumo|estrat[eé]gia|como funciona|passo a passo|crie|escreva|redija|c[oó]digo|programa|receita|treino|dieta|or[cç]amento|investir|vale a pena|qual (o )?melhor|me ajuda a decidir|dica)/i.test(String(t));
 async function streamGemini(contents, onText, signal){
   if (!S.gModels.length){ try { S.gModels = await listModels(K.g); } catch { S.gModels = []; } if (!S.gModels.length) S.gModels = FALLBACK_MODELS.slice(); save(); }
@@ -2868,13 +3065,32 @@ async function send(text){
     } catch { curResearch = null; }
     if (ctl.signal.aborted) throw new DOMException("aborted", "AbortError");
     if (curResearch && curResearch.text){ bubble.textContent = "Lendo os resultados…"; setChip("busy", "Pensando"); }
-    raw = await think(merged, full => {
-      raw = full;
-      const vis = visible(full);
-      bubble.className = "msg ai"; bubble.textContent = vis; scrollDown();
-      if (phase === "thinking") setPhase("writing");
-      if (vis.length > spokenLen){ feed(vis.slice(spokenLen)); spokenLen = vis.length; }
-    }, ctl.signal);
+    toolHops = 0;
+    for (;;){
+      let holding = true;   /* while the reply might be a [[buscar: …]] request, say nothing */
+      raw = await think(merged, full => {
+        raw = full;
+        if (holding){ if (TOOL_PREFIX.test(full) || TOOL_RE.test(full)) return; holding = false; }
+        const vis = visible(full);
+        bubble.className = "msg ai"; bubble.textContent = vis; scrollDown();
+        if (phase === "thinking") setPhase("writing");
+        if (vis.length > spokenLen){ feed(vis.slice(spokenLen)); spokenLen = vis.length; }
+      }, ctl.signal);
+      const tm = raw.match(TOOL_RE);
+      if (!tm || spokenLen > 0 || toolHops >= 2) break;
+      toolHops++;
+      const kind = tm[1].toLowerCase(), q = tm[2].trim();
+      bubble.className = "msg ai wait"; bubble.textContent = kind === "ler" ? "Lendo a página…" : `Pesquisando: ${q}…`; setChip("busy", "Pesquisando"); setPhase("thinking");
+      const found = await deepSearch(kind, q);
+      if (ctl.signal.aborted) throw new DOMException("aborted", "AbortError");
+      const prev = curResearch && curResearch.text ? curResearch : null;
+      curResearch = found && found.text
+        ? { text: (prev ? prev.text + "\n\n" : "") + found.text, sources: [...(prev ? prev.sources : []), ...found.sources].slice(0, 5), tried: true, query: q }
+        : { text: prev ? prev.text : "", sources: prev ? prev.sources : [], tried: true, query: q };
+      if (!found || !found.text) toolHops = 2;   /* nothing found: answer with what it knows */
+      bubble.textContent = "Lendo os resultados…"; setChip("busy", "Pensando");
+      raw = "";
+    }
     const vis = visible(raw);
     if (vis.length > spokenLen) feed(vis.slice(spokenLen));
     flushFeed();
@@ -2901,6 +3117,7 @@ async function send(text){
     turns.push({ role: "assistant", content: vis || "Feito." });
     saveChat();
     if (!vis) speak("Feito.");
+    setTimeout(summarizeOld, 4000);
   } catch (e) {
     feedBuf = "";
     if (e && e.name === "AbortError"){ if (!bubble.textContent || bubble.classList.contains("wait")) bubble.remove(); else turns.push({ role: "assistant", content: bubble.textContent }); }
@@ -2959,11 +3176,18 @@ function renderEngine(){
   const showG = S.engine === "gemini" || (S.engine === "auto" && eng === "gemini");
   const showE = S.engine === "eleven" || (S.engine === "auto" && eng === "eleven");
   $("#gBox").hidden = !showG; $("#eBox").hidden = $("#eModelBox").hidden = $("#eStabBox").hidden = !showE;
-  const names = { eleven: "ElevenLabs", gemini: "Google AI Studio", phone: "voz do celular" };
+  $("#azBox").hidden = !(S.engine === "azure" || azOn());
+  const names = { eleven: "ElevenLabs", gemini: "Google AI Studio", phone: "voz do celular", azure: "Microsoft Azure", own: "voz própria do Dzeko" };
+  const ov = $("#fOwnVoice"); if (!ov.options.length) OWN_VOICES.forEach(([v, d]) => ov.append(new Option(d, v)));
+  ov.value = S.ownVoice || OWN_VOICES[0][0]; $("#fOwnOn").checked = S.ownOn !== false;
+  const av = $("#fAzVoice"); if (!av.options.length) AZ_VOICES.forEach(([v, d]) => av.append(new Option(d, v)));
+  av.value = S.azVoice || AZ_VOICES[0][0]; $("#fAzKey").value = AZ.key; $("#fAzRegion").value = AZ.region;
+  if (!$("#ownInfo").textContent) $("#ownInfo").textContent = ownReady ? "Voz própria pronta no aparelho." : ownState ? "Voz própria: " + ownState + "." : "";
   let info = `Usando agora: ${names[eng]}.`;
   if (S.engine === "eleven" && !K.e) info = "Falta a chave da ElevenLabs (Ajustes › Trocar chaves). Enquanto isso: " + names[eng] + ".";
   if (S.engine === "gemini" && !K.g) info = "Falta a chave do Gemini. Enquanto isso: " + names[eng] + ".";
-  if (eng !== "phone") info += " Se ela falhar, a outra voz da nuvem assume.";
+  if (S.engine === "azure" && !azOn()) info = "Falta a chave da Microsoft (abaixo). Enquanto isso: " + names[eng] + ".";
+  if (eng !== "phone") info += ` Se falhar, a ordem é: ${voiceOrder().map(x => names[x]).join(", ")} e, por último, a voz do celular.`;
   $("#engineInfo").textContent = info;
 }
 function renderVoices(){
@@ -3021,7 +3245,16 @@ $("#fWeb").onchange = e => { S.web = e.target.checked; save(); };
 $("#fChime").onchange = e => { S.chime = e.target.checked; save(); if (S.chime) chime(); };
 const sample = () => { stopSpeech(); ttsWarned = false; hint(""); speak(`Às suas ordens, ${S.nick}. Todos os sistemas operando normalmente. Em que posso ajudar hoje?`); };
 $("#fVoice").onchange = e => { S.voiceId = e.target.value; save(); sample(); };
-$("#fEngine").onchange = e => { S.engine = e.target.value; save(); renderEngine(); sample(); };
+$("#fEngine").onchange = e => { S.engine = e.target.value; save(); renderEngine(); if (S.engine === "own" && !ownReady){ ownWarm().then(() => sample()).catch(() => {}); hint("Baixando a voz própria uma única vez (cerca de 60 MB). Ela fala assim que terminar."); } else sample(); };
+$("#fOwnVoice").onchange = e => { S.ownVoice = e.target.value; save(); ownReady = false; ownPrep = null; ownWarm().then(() => sample()).catch(() => {}); };
+$("#fOwnOn").onchange = e => { S.ownOn = e.target.checked; save(); renderEngine(); };
+$("#ownGet").onclick = () => { $("#ownInfo").textContent = "Preparando…"; ownWarm().then(() => { S.engine === "own" && sample(); }).catch(() => {}); };
+$("#fAzVoice").onchange = e => { S.azVoice = e.target.value; save(); if (azOn()) sample(); };
+const azSave = () => { AZ = { key: $("#fAzKey").value.trim(), region: ($("#fAzRegion").value.trim() || "brazilsouth").toLowerCase().replace(/\s+/g, "") }; ls.set("dzk.azure", AZ); delete ttsCool.azure; renderEngine(); };
+$("#fAzKey").onchange = () => { azSave(); if (azOn()){ S.engine = "azure"; save(); renderEngine(); sample(); } };
+$("#fAzRegion").onchange = azSave;
+/* get the free voice ready in the background on Wi-Fi, so it is there when the cloud fails */
+setTimeout(() => { try { const c = navigator.connection; if (S.ownOn !== false && (S.engine === "own" || !c || c.type === "wifi" || c.effectiveType === "4g" && !c.saveData)) ownWarm().catch(() => {}); } catch {} }, 15000);
 $("#fGVoice").onchange = e => { S.gVoice = e.target.value; save(); sample(); };
 $("#fGStyle").onchange = e => { S.gStyle = e.target.value; save(); sample(); };
 $("#fModel").onchange = e => { S.model = e.target.value; save(); sample(); };

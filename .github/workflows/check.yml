@@ -1,0 +1,18 @@
+name: Verificar serviços externos
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install playwright==1.48.0
+      - name: Azure CORS
+        run: |
+          H=$(curl -s -i -X OPTIONS https://brazilsouth.tts.speech.microsoft.com/cognitiveservices/v1 -H "Origin: https://vitor12v.github.io" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: ocp-apim-subscription-key,content-type,x-microsoft-outputformat" | tr -d '\r' | grep -i "^HTTP\|access-control" | tr '\n' ' ')
+          echo "::notice title=azure_cors::$H"
+      - run: python tests/ci_check.py
