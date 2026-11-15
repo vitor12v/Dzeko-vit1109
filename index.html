@@ -630,17 +630,24 @@ if (NATIVE){
   window.SpeechRecognition = window.webkitSpeechRecognition = NativeSR;
   /* phone voice through Android's text-to-speech */
   let ttsSeq = 0; const ttsWait = {};
+  /* "speaking" expires on its own: a lost "done" signal must never leave the app thinking it is still talking */
+  const ttsAlive = () => { const now = Date.now(); let any = false; for (const k in ttsWait){ const w = ttsWait[k]; if (now - w.t0 > w.max){ delete ttsWait[k]; try { w.u.onend && w.u.onend({}); } catch {} } else any = true; } return any; };
   const synthNative = {
-    speaking: false, pending: false, paused: false,
+    pending: false, paused: false,
+    get speaking(){ return ttsAlive(); },
     getVoices(){ return [{ name: "Android pt-BR", lang: "pt-BR", default: true, localService: true, voiceURI: "android" }]; },
-    speak(u){ const id = "u" + (++ttsSeq); ttsWait[id] = u; synthNative.speaking = true; NATIVE.ttsSpeak(id, String(u.text || ""), +u.rate || 1, +u.pitch || 1); },
-    cancel(){ NATIVE.ttsStop(); const all = Object.values(ttsWait); for (const k in ttsWait) delete ttsWait[k]; synthNative.speaking = false; all.forEach(u => { try { u.onend && u.onend({}); } catch {} }); },
+    speak(u){
+      const text = String(u.text || "").trim();
+      if (!text){ setTimeout(() => { try { u.onend && u.onend({}); } catch {} }, 0); return; }
+      const id = "u" + (++ttsSeq); ttsWait[id] = { u, t0: Date.now(), max: 4000 + text.length * 110 };
+      NATIVE.ttsSpeak(id, text, +u.rate || 1, +u.pitch || 1);
+    },
+    cancel(){ NATIVE.ttsStop(); const all = Object.values(ttsWait); for (const k in ttsWait) delete ttsWait[k]; all.forEach(w => { try { w.u.onend && w.u.onend({}); } catch {} }); },
     pause(){}, resume(){}, addEventListener(){}, removeEventListener(){}
   };
   handlers.tts = (type, d) => {
-    const u = ttsWait[d.id]; if (!u) return; delete ttsWait[d.id];
-    if (!Object.keys(ttsWait).length) synthNative.speaking = false;
-    const f = type === "error" ? (u.onerror || u.onend) : u.onend; try { f && f({}); } catch {}
+    const w = ttsWait[d.id]; if (!w) return; delete ttsWait[d.id];
+    const u = w.u, f = type === "error" ? (u.onerror || u.onend) : u.onend; try { f && f({}); } catch {}
   };
   try { Object.defineProperty(window, "speechSynthesis", { value: synthNative, configurable: true }); } catch { window.speechSynthesis = synthNative; }
   if (!window.SpeechSynthesisUtterance) window.SpeechSynthesisUtterance = function(t){ this.text = t; this.rate = 1; this.pitch = 1; this.lang = "pt-BR"; this.volume = 1; };
@@ -974,7 +981,7 @@ function phoneVoice(){
   const pt = synth.getVoices().filter(v => /^pt/i.test(v.lang));
   return pt.find(v => MALE.test(v.name) && /BR/i.test(v.lang)) || pt.find(v => MALE.test(v.name)) || pt.find(v => /BR/i.test(v.lang)) || pt[0] || null;
 }
-function unlockSynth(){ try { if (synth && !synth.speaking){ const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); } } catch {} }
+function unlockSynth(){ if (NATIVE) return; try { if (synth && !synth.speaking){ const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); } } catch {} }
 function synthSay(text, gen){
   return new Promise(res => {
     if (!synth || gen !== speakGen){ res(); return; }
@@ -1054,7 +1061,8 @@ function updateWakeUI(){
   $("#wakeBtn").setAttribute("aria-pressed", wakeWanted);
   $("#wakeTitle").textContent = wakeWanted ? `Escuta ligada · diga “${S.wakeWord}”` : "Ligar palavra de ativação";
   $("#wakeSmall").textContent = wakeWanted ? "Deixe a tela aberta. Toque para desligar." : `Diga “${S.wakeWord}” e o pedido, sem tocar na tela`;
-  $("#hudWake").textContent = wakeWanted ? (wakeRec ? "escuta on" : "conectando") : "escuta off";
+  $("#hudWake").textContent = wakeWanted ? (wakeRec || vad ? "escuta on" : "conectando") : "escuta off";
+  if (wakeWanted) $("#wakeSmall").textContent = vad ? "Microfone aberto, sem ligar e desligar. Toque para desligar." : "Deixe a tela aberta. Toque para desligar.";
   if (phase === "idle") setPhase("idle");
 }
 let heardT = null, preArmed = false;
@@ -1074,9 +1082,87 @@ function handleFinal(txt){
   if (Date.now() < armedUntil){ fire(txt); return; }
   showHeard("");
 }
+/* ---------- Steady listening: the mic stays open, a voice detector cuts each phrase, Whisper (Groq) reads it.
+   No start/stop loop, so the microphone doesn't keep switching on and off. ---------- */
+let vad = null, vadCalls = [], vadBusy = 0;
+const useVad = () => !!(K.q && S.whisper !== false && navigator.mediaDevices && (window.AudioContext || window.webkitAudioContext) && !(S.whisperOffUntil > Date.now()));
+async function vadStart(){
+  if (vad) return true;
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch (err){ if (err && /NotAllowed|Security/i.test(err.name)){ micBlocked = true; hint(MIC_BLOCKED); } else hint(micError("audio-capture")); return false; }
+  if (!wakeWanted){ stream.getTracks().forEach(t => t.stop()); return false; }
+  const ctx = audio(); const sr = ctx.sampleRate;
+  const src = ctx.createMediaStreamSource(stream);
+  const proc = ctx.createScriptProcessor(4096, 1, 1);
+  const sink = ctx.createGain(); sink.gain.value = 0;
+  src.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
+  const blockMs = 4096 / sr * 1000;
+  const st = { stream, src, proc, sink, ring: [], seg: null, segMs: 0, silenceMs: 0, loudMs: 0, noise: .008 };
+  proc.onaudioprocess = e => {
+    const x = e.inputBuffer.getChannelData(0);
+    let sum = 0; for (let i = 0; i < x.length; i++) sum += x[i] * x[i];
+    const rms = Math.sqrt(sum / x.length);
+    if (!st.seg) st.noise = st.noise * .96 + Math.min(rms, .05) * .04;              /* learns the room's background noise */
+    const loud = rms > Math.max(.012, st.noise * 3);
+    /* ignore while he is talking or while push-to-talk records */
+    if (pttActive || talking()){ st.seg = null; st.ring = []; st.loudMs = 0; return; }
+    const chunk = new Float32Array(x);
+    if (!st.seg){
+      st.ring.push(chunk); if (st.ring.length > 3) st.ring.shift();                 /* ~0.25 s before the voice starts */
+      st.loudMs = loud ? st.loudMs + blockMs : 0;
+      if (st.loudMs >= 150){ st.seg = st.ring.slice(); st.segMs = st.seg.length * blockMs; st.silenceMs = 0; st.speechMs = st.loudMs; }
+    } else {
+      st.seg.push(chunk); st.segMs += blockMs;
+      if (loud){ st.silenceMs = 0; st.speechMs += blockMs; } else st.silenceMs += blockMs;
+      if (st.silenceMs > 900 || st.segMs > 9000){
+        const seg = st.seg, speech = st.speechMs; st.seg = null; st.ring = []; st.loudMs = 0;
+        if (speech >= 350) vadTranscribe(seg, sr);
+      }
+    }
+  };
+  vad = st; updateWakeUI(); return true;
+}
+function vadStop(){
+  if (!vad) return;
+  const v = vad; vad = null;
+  try { v.proc.onaudioprocess = null; v.src.disconnect(); v.proc.disconnect(); v.sink.disconnect(); } catch {}
+  v.stream.getTracks().forEach(t => t.stop());
+  updateWakeUI();
+}
+function wavBlob(chunks, sr){
+  let len = 0; for (const c of chunks) len += c.length;
+  const all = new Float32Array(len); let o = 0; for (const c of chunks){ all.set(c, o); o += c.length; }
+  const ratio = sr / 16000, n = Math.floor(len / ratio), pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++){ const v = all[Math.floor(i * ratio)]; pcm[i] = Math.max(-1, Math.min(1, v)) * 0x7fff; }
+  const h = new DataView(new ArrayBuffer(44)), w = (p, t) => { for (let i = 0; i < t.length; i++) h.setUint8(p + i, t.charCodeAt(i)); };
+  w(0, "RIFF"); h.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt "); h.setUint32(16, 16, true); h.setUint16(20, 1, true); h.setUint16(22, 1, true);
+  h.setUint32(24, 16000, true); h.setUint32(28, 32000, true); h.setUint16(32, 2, true); h.setUint16(34, 16, true); w(36, "data"); h.setUint32(40, n * 2, true);
+  return new Blob([h.buffer, pcm.buffer], { type: "audio/wav" });
+}
+async function vadTranscribe(seg, sr){
+  if (busy || vadBusy > 1) return;
+  const now = Date.now(); vadCalls = vadCalls.filter(t => now - t < 60000);
+  if (vadCalls.length >= 18) return;                                            /* stays inside Groq's free limit */
+  vadCalls.push(now); vadBusy++;
+  try {
+    const fd = new FormData();
+    fd.append("file", wavBlob(seg, sr), "fala.wav"); fd.append("model", "whisper-large-v3-turbo"); fd.append("language", "pt"); fd.append("response_format", "json");
+    fd.append("prompt", `${S.wakeWord || "Dzeko"}, toca uma música. ${S.wakeWord || "Dzeko"}, põe um alarme.`);
+    const r = await fetch(`${GQ}/audio/transcriptions`, { method: "POST", headers: { Authorization: "Bearer " + K.q }, body: fd });
+    if (r.status === 429){ S.whisperOffUntil = Date.now() + 10 * 60e3; save(); vadStop(); hint("A escuta contínua bateu no limite grátis da Groq; voltei ao modo normal por 10 minutos."); if (wakeWanted) startWake(); return; }
+    if (!r.ok) return;
+    const text = String((await r.json()).text || "").trim();
+    if (!text || WHISPER_JUNK.test(text) || busy) return;
+    if (echoWindow()) return;
+    if (findWake(text) || Date.now() < armedUntil){ showHeard(text); handleFinal(text); }
+  } catch {} finally { vadBusy--; }
+}
+
 function startWake(){
   clearTimeout(restartT);
-  if (!wakeWanted || wakeRec || pttActive || document.visibilityState === "hidden") return;
+  if (!wakeWanted || wakeRec || vad || pttActive || document.visibilityState === "hidden") return;
+  if (useVad()){ vadStart().then(ok => { if (!ok && wakeWanted && !micBlocked && SR){ S.whisperOffUntil = Date.now() + 10 * 60e3; save(); startWake(); } }); return; }
   if (!SR){ stopWake(); hint("Este navegador não tem reconhecimento de voz. Use o Chrome."); return; }
   if (micBlocked){ stopWake(); hint(MIC_BLOCKED); return; }
   try {
@@ -1105,7 +1191,7 @@ function startWake(){
       wakeRec = null;
       if (Date.now() - wakeStartedAt < 1500) quickFails++; else quickFails = 0;
       updateWakeUI();
-      if (wakeWanted && !pttActive) restartT = setTimeout(startWake, quickFails > 5 ? 3000 : quickFails > 2 ? 1200 : 150);
+      if (wakeWanted && !pttActive) restartT = setTimeout(startWake, quickFails > 8 ? 2500 : 250);
     };
     wakeStartedAt = Date.now(); r.start(); wakeRec = r; updateWakeUI();
   } catch { wakeRec = null; restartT = setTimeout(startWake, 1500); }
@@ -1113,16 +1199,21 @@ function startWake(){
 function stopWake(){
   wakeWanted = false; clearTimeout(restartT); armedUntil = 0;
   if (wakeRec){ const r = wakeRec; wakeRec = null; r.onend = null; try { r.abort(); } catch {} }
+  vadStop();
   releaseScreen(); showHeard(""); updateWakeUI();
   if (phase === "armed") setPhase("idle");
 }
 function setWake(on){
   S.wake = on; save();
-  if (on){ micBlocked = false; quickFails = 0; wakeWanted = true; hint(""); startWake(); holdScreen(); setPhase("idle"); }
+  if (on){ micBlocked = false; quickFails = 0; wakeWanted = true; hint(useVad() || !K.q ? "" : ""); startWake(); holdScreen(); setPhase("idle");
+    if (!useVad()) hint("Dica: com a chave grátis da Groq (Ajustes › Conectar chaves), a escuta fica contínua, sem o microfone ligar e desligar."); }
   else stopWake();
 }
 $("#wakeBtn").addEventListener("click", () => setWake(!wakeWanted));
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && wakeWanted){ startWake(); holdScreen(); } });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && wakeWanted){ startWake(); holdScreen(); }
+  else if (document.visibilityState === "hidden") vadStop();      /* the mic is released when you leave the app */
+});
 setInterval(() => { if (phase === "armed" && Date.now() > armedUntil){ armedUntil = 0; preArmed = false; setPhase("idle"); } }, 300);
 function afterSpeech(){
   if (S.follow && wakeWanted && !busy) arm(7000);
