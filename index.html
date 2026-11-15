@@ -2588,20 +2588,31 @@ async function getText(u, ms = 9000, headers){
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
   try { const r = await fetch(u, { signal: ctl.signal, headers }); if (!r.ok) return ""; return await r.text(); } catch { return ""; } finally { clearTimeout(t); }
 }
-/* Bing web results (RSS), the same way the news search works */
+/* web results: DuckDuckGo's results page, read through Jina Reader (both free, no key) */
+const mdClean = t => String(t).replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\*\*/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 async function webSearch(q){
-  const j = await getJSON(RSS(`https://www.bing.com/search?q=${enc(q)}&format=rss&setlang=pt-BR&cc=BR&mkt=pt-BR`), 7000);
-  if (!j || !j.items) return [];
-  return j.items.slice(0, 6).map(i => {
-    let host = ""; try { host = new URL(i.link).hostname.replace(/^(www|m)\./, ""); } catch {}
-    return { title: String(i.title || "").trim(), link: i.link || "", src: host, desc: String(i.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300) };
-  }).filter(x => x.link);
+  const md = await getText("https://r.jina.ai/https://html.duckduckgo.com/html/?q=" + enc(q) + "&kl=br-pt", 12000);
+  if (!md) return [];
+  const out = [];
+  for (const sec of md.split(/\n## \[/).slice(1)){
+    const m = sec.match(/^(.+?)\]\((https?:\/\/duckduckgo\.com\/l\/\?uddg=([^&)]+)[^)]*)\)/);
+    if (!m) continue;
+    let link = ""; try { link = decodeURIComponent(m[3]); } catch { continue; }
+    if (!/^https?:/.test(link)) continue;
+    let host = ""; try { host = new URL(link).hostname.replace(/^(www|m)\./, ""); } catch {}
+    const texts = [...sec.matchAll(/\[([^\]]{40,})\]\(/g)].map(x => x[1]);
+    const desc = mdClean(texts.sort((x, y) => y.length - x.length)[0] || "").slice(0, 300);
+    out.push({ title: mdClean(m[1]), link, src: host, desc });
+    if (out.length >= 6) break;
+  }
+  return out;
 }
 /* reads a page as clean text (Jina Reader, free) */
 async function readPage(url, max = 3500){
   if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-  const t = await getText("https://r.jina.ai/" + url, 12000, { "X-Return-Format": "text" });
-  return t.replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
+  const t = await getText("https://r.jina.ai/" + url, 15000);
+  const body = t.includes("Markdown Content:") ? t.split("Markdown Content:").slice(1).join("") : t;
+  return mdClean(body).slice(0, max);
 }
 /* Groq Compound: a search engine with a brain (web search + code), when the user has a Groq key */
 async function compoundSearch(q){

@@ -16,9 +16,10 @@ with sync_playwright() as p:
     page.on("pageerror", lambda e: logs.append("PAGEERROR " + str(e)))
     page.goto("http://127.0.0.1:8780/index.html"); page.wait_for_timeout(1500)
     for label, js in [
-        ("jina_wiki", "(async () => { const r = await fetch('https://r.jina.ai/https://pt.wikipedia.org/wiki/Homem_de_Ferro'); const t = await r.text(); return r.status + ' ' + t.length + ' | ' + t.slice(0, 900); })()"),
-        ("jina_ddg", "(async () => { const r = await fetch('https://r.jina.ai/https://html.duckduckgo.com/html/?q=' + encodeURIComponent('preço iPhone 17 Brasil')); const t = await r.text(); return r.status + ' ' + t.length + ' | ' + t.slice(0, 1700); })()"),
-        ("jina_bing", "(async () => { const r = await fetch('https://r.jina.ai/https://www.bing.com/search?q=' + encodeURIComponent('preço iPhone 17 Brasil') + '&setlang=pt-BR&cc=BR'); const t = await r.text(); return r.status + ' ' + t.length + ' | ' + t.slice(0, 1700); })()"),
+        ("web", "(async () => { const r = await __dzkDbg.webSearch('preço iPhone 17 Brasil'); return r.length + ' | ' + r.slice(0,4).map(x => x.src + ': ' + x.title + ' — ' + x.desc.slice(0,120)).join(' ;; '); })()"),
+        ("deep", "(async () => { const r = await __dzkDbg.deepSearch('buscar', 'horário de funcionamento Smart Fit domingo'); return r.text.length + ' | fontes ' + JSON.stringify(r.sources) + ' | ' + r.text.slice(0, 1400); })()"),
+        ("ler", "(async () => { const t = await __dzkDbg.readPage('https://pt.wikipedia.org/wiki/J.A.R.V.I.S.', 700); return t.length + ' | ' + t; })()"),
+        ("own_tts", "(async () => { await __dzkDbg.ownWarm(); const t0 = performance.now(); try { const b = await __dzkDbg.ownTTS('Às suas ordens, senhor. Todos os sistemas estão operando normalmente.'); return 'ok dur ' + b.duration.toFixed(2) + 's em ' + Math.round(performance.now() - t0) + 'ms'; } catch (e) { return 'ERRO ' + (e && (e.stack || e.message) || e); } })()"),
     ]:
         try: note(label, page.evaluate(js))
         except Exception as e: note(label, "EXC " + str(e))
