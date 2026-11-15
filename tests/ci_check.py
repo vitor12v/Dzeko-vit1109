@@ -16,12 +16,12 @@ with sync_playwright() as p:
     page.on("pageerror", lambda e: logs.append("PAGEERROR " + str(e)))
     page.goto("http://127.0.0.1:8780/index.html"); page.wait_for_timeout(1500)
     for label, js in [
-        ("web", "(async () => { const r = await __dzkDbg.webSearch('preço iPhone 17 Brasil'); return r.length + ' | ' + r.slice(0,3).map(x => x.src + ': ' + x.title).join(' ; '); })()"),
-        ("ler", "(async () => { const t = await __dzkDbg.readPage('https://pt.wikipedia.org/wiki/J.A.R.V.I.S.', 600); return t.length + ' | ' + t.slice(0, 300); })()"),
-        ("deep", "(async () => { const r = await __dzkDbg.deepSearch('buscar', 'previsão do tempo São Paulo amanhã'); return r.text.length + ' | fontes ' + JSON.stringify(r.sources) + ' | ' + r.text.slice(0, 400); })()"),
-        ("own_load", "(async () => { const t0 = performance.now(); try { await __dzkDbg.ownWarm(); return 'ok ' + Math.round(performance.now() - t0) + 'ms'; } catch (e) { return 'ERRO ' + (e && (e.stack || e.message) || e); } })()"),
-        ("own_tts1", "(async () => { const t0 = performance.now(); try { const b = await __dzkDbg.ownTTS('Às suas ordens, senhor. Todos os sistemas estão operando normalmente.'); return 'ok dur ' + b.duration.toFixed(2) + 's em ' + Math.round(performance.now() - t0) + 'ms'; } catch (e) { return 'ERRO ' + (e && (e.stack || e.message) || e); } })()"),
-        ("own_tts2", "(async () => { const t0 = performance.now(); try { const b = await __dzkDbg.ownTTS('A previsão indica chuva às três da tarde, com vinte e dois graus.'); return 'ok dur ' + b.duration.toFixed(2) + 's em ' + Math.round(performance.now() - t0) + 'ms'; } catch (e) { return 'ERRO ' + (e && (e.stack || e.message) || e); } })()"),
+        ("jina_wiki", "(async () => { const r = await fetch('https://r.jina.ai/https://pt.wikipedia.org/wiki/Homem_de_Ferro'); const t = await r.text(); return r.status + ' ' + t.length + ' | ' + t.slice(0, 500); })()"),
+        ("jina_ddg", "(async () => { const r = await fetch('https://r.jina.ai/https://html.duckduckgo.com/html/?q=' + encodeURIComponent('preço iPhone 17 Brasil')); const t = await r.text(); return r.status + ' ' + t.length + ' | ' + t.slice(0, 700); })()"),
+        ("jina_bing", "(async () => { const r = await fetch('https://r.jina.ai/https://www.bing.com/search?q=' + encodeURIComponent('preço iPhone 17 Brasil') + '&setlang=pt-BR&cc=BR'); const t = await r.text(); return r.status + ' ' + t.length + ' | ' + t.slice(0, 700); })()"),
+        ("ddg_lite_json", "(async () => { try { const r = await fetch('https://api.duckduckgo.com/?format=json&no_html=1&q=' + encodeURIComponent('Homem de Ferro')); return r.status + ' ' + (await r.text()).slice(0, 300); } catch (e) { return 'ERRO ' + e; } })()"),
+        ("searx", "(async () => { try { const r = await fetch('https://search.inetol.net/search?format=json&q=' + encodeURIComponent('preço iPhone 17')); return r.status + ' ' + (await r.text()).slice(0, 300); } catch (e) { return 'ERRO ' + e; } })()"),
+        ("wiki_search", "(async () => { const r = await fetch('https://pt.wikipedia.org/w/api.php?origin=*&action=query&list=search&format=json&srlimit=3&srsearch=' + encodeURIComponent('preço iPhone 17')); return (await r.text()).slice(0, 300); })()"),
     ]:
         try: note(label, page.evaluate(js))
         except Exception as e: note(label, "EXC " + str(e))
