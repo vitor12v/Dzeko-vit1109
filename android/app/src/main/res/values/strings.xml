@@ -1,5 +1,3 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="access_label">Dzeko · controle do celular</string>
-    <string name="access_desc">Deixa o Dzeko tocar em Enviar no WhatsApp quando você pede para mandar uma mensagem, e fazer ações de tela que você pedir (voltar, tela inicial, bloquear, print). O Dzeko só enxerga o WhatsApp: bancos, galeria e todos os outros apps ficam fora de alcance.</string>
 </resources>

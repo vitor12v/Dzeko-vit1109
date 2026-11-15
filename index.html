@@ -417,10 +417,10 @@ form#ask{display:flex;gap:8px;align-items:center;background:var(--surface);borde
 
       <div class="card group" id="accCard">
         <h3><span class="dot" style="background:rgba(142,219,90,.14);color:var(--ok)"><svg><use href="#i-check"/></svg></span>Acesso ao celular</h3>
-        <p class="muted" id="accIntro">Para eu fazer as coisas sozinho no celular. Bancos e galeria ficam sempre fora: o controle só enxerga o WhatsApp, e eu me recuso a abrir apps de banco e a galeria.</p>
-        <div class="conn" id="accRow"><i></i><span>Controle do celular<br><small class="muted">Enviar WhatsApp sozinho, bloquear a tela, print, voltar, tela inicial</small></span><button class="pill go" type="button" id="accOn">Ativar</button></div>
+        <p class="muted" id="accIntro">Eu toco música, crio alarmes e timers, abro apps, traço rotas, ligo e escrevo no WhatsApp direto no celular. Apps de banco e a galeria eu nunca abro.</p>
+        <div class="conn" id="accRow" hidden><i></i><span>Controle do celular</span><button class="pill go" type="button" id="accOn">Ativar</button></div>
         <div class="conn" id="ctRow"><i></i><span>Contatos<br><small class="muted">“Liga pra mãe”, “manda pro João…”</small></span><button class="pill go" type="button" id="ctOn">Permitir</button></div>
-        <small class="muted" id="accHelp">Se o Android disser “configuração restrita”: abra Configurações › Apps › Dzeko › ⋮ (canto de cima) › Permitir configurações restritas, e tente de novo.</small>
+        <small class="muted" id="accHelp" hidden></small>
       </div>
 
       <div class="card group" id="pcCard">
@@ -1408,11 +1408,10 @@ function renderAccess(){
   const card = $("#accCard");
   if (!NATIVE || typeof NATIVE.accessEnabled !== "function"){
     $("#accIntro").textContent = "Disponível no app Android do Dzeko: enviar WhatsApp sozinho, ligar pelo nome do contato, bloquear a tela, print e mais.";
-    $("#accRow").hidden = $("#ctRow").hidden = $("#accHelp").hidden = true; return;
+    $("#ctRow").hidden = true; return;
   }
-  const acc = !!NATIVE.accessEnabled(), ct = !!NATIVE.hasContacts();
-  $("#accRow").classList.toggle("on", acc); $("#ctRow").classList.toggle("on", ct);
-  $("#accOn").hidden = acc; $("#ctOn").hidden = ct; $("#accHelp").hidden = acc;
+  const ct = !!NATIVE.hasContacts();
+  $("#ctRow").classList.toggle("on", ct); $("#ctOn").hidden = ct;
 }
 $("#accOn").onclick = () => { NATIVE && NATIVE.openAccessSettings(); };
 $("#ctOn").onclick = () => { NATIVE && NATIVE.requestContacts(); setTimeout(renderAccess, 4000); };
@@ -1770,7 +1769,7 @@ function nativeRun(l){
         if (typeof NATIVE.whatsapp !== "function") return NATIVE.openUrl(l.url);
         const r = NATIVE.whatsapp(l.contact || (digits(a).length >= 8 ? a : ""), l.msg || "");
         if (r === "notfound"){ addMsg("sys", `📇 Não achei “${l.contact}” nos seus contatos. Escolha o contato no WhatsApp.`); return NATIVE.openUrl(l.url); }
-        if (r === "opened") addMsg("sys", "💬 Mensagem escrita no WhatsApp. Ative o controle do celular em Ajustes para eu enviar sozinho.");
+        if (r === "opened") addMsg("sys", "💬 Mensagem pronta no WhatsApp. É só tocar em Enviar.");
         return r !== "failed";
       }
       case "agenda": {
@@ -1924,8 +1923,10 @@ function localIntent(raw){
   }
 
   /* phone screen actions */
-  if (/^(bloqueia|bloquear|trava|travar|tranca|desliga a tela|apaga a tela)( o)?( (celular|telefone|tela))?$/.test(n)) return { cmds: ["[[celular: bloquear]]"], say: "Bloqueando." };
-  if (/^(tira|tirar|faz|fazer|da) (um )?(print|captura|screenshot)/.test(n)) return { cmds: ["[[celular: print]]"], say: "Print feito." };
+  const canScreen = NATIVE && typeof NATIVE.accessEnabled === "function" && NATIVE.accessEnabled();
+  const noScreen = "Essa eu não consigo, " + nick + ". O Android só libera bloquear a tela e tirar print para apps da Play Store. Use o botão lateral, ou o botão lateral com o de volume para o print.";
+  if (/^(bloqueia|bloquear|trava|travar|tranca|desliga a tela|apaga a tela)( o)?( (celular|telefone|tela))?$/.test(n)) return canScreen ? { cmds: ["[[celular: bloquear]]"], say: "Bloqueando." } : { cmds: [], say: noScreen };
+  if (/^(tira|tirar|faz|fazer|da) (um )?(print|captura|screenshot)/.test(n)) return canScreen ? { cmds: ["[[celular: print]]"], say: "Print feito." } : { cmds: [], say: noScreen };
   if (/^(volta|voltar)( a tela)?$/.test(n)) return { cmds: ["[[celular: voltar]]"], say: "" };
   if (/^(vai para a |vai pra |volta pra |volta para a )?(tela inicial|tela de inicio|home)$/.test(n)) return { cmds: ["[[celular: inicio]]"], say: "" };
   if (/^(abre|abrir|mostra|mostrar) (as )?notificacoes$/.test(n)) return { cmds: ["[[celular: notificacoes]]"], say: "" };
@@ -2163,8 +2164,7 @@ ${NATIVE ? `[[lanterna: liga]] ou [[lanterna: desliga]] controla a lanterna.
 [[volume: mais | menos | mudo | max | NÚMERO de 0 a 100]] muda o volume do celular.
 [[ajustes: wifi | bluetooth | internet | som | bateria | tela | localização | geral]] abre essa tela de ajustes.
 VOCÊ ESTÁ NO APP ANDROID DO ${S.name.toUpperCase()}: alarmes e timers são criados de verdade no relógio do celular, apps abrem sozinhos, a música começa a tocar, a navegação do Maps inicia, ligações são feitas na hora e compromissos vão direto para a agenda, tudo sem o usuário tocar em nada. Então confirme como feito ("Alarme das oito criado no seu relógio", "Ligando para…", "Navegação iniciada"). Exceção: no WhatsApp, SMS e e-mail a mensagem fica escrita e o usuário só toca em enviar, porque esses apps não deixam enviar sozinho; diga isso em meia frase.` : `Para abrir apps, mensagens, ligações e agenda, o usuário confirma com um toque no botão que aparece, porque o navegador do Android exige isso. Então diga algo como "Preparado, é só tocar" em vez de afirmar que já fez. Lanterna, volume, ajustes do celular e alarmes no relógio do sistema só funcionam no app Android do ${S.name}; se pedirem, diga isso com elegância e, para alarmes, crie o alarme interno mesmo assim.`}
-${NATIVE ? `[[celular: bloquear | print | voltar | inicio | recentes | notificacoes]] mexe na tela do celular.
-Ligações e WhatsApp aceitam o NOME do contato: [[ligar: Mãe]], [[whatsapp: João | chego em 10 minutos]]. Com o controle do celular ativo, a mensagem do WhatsApp é enviada sozinha.` : ""}
+${NATIVE ? `Ligações e WhatsApp aceitam o NOME do contato: [[ligar: Mãe]], [[whatsapp: João | chego em 10 minutos]]. No WhatsApp a mensagem fica escrita e o usuário só toca em Enviar. Você não consegue bloquear a tela, tirar print nem tocar em botões de outros apps: o Android só libera isso para apps da Play Store; diga isso com elegância se pedirem.` : ""}
 REGRA DE OURO: uma ação só acontece se o comando estiver na resposta. Se você disser que tocou, abriu, criou ou ligou, o comando TEM de estar no final, em linha própria, com colchetes duplos. Sem comando, nada acontece e você terá mentido para o usuário.
 EXEMPLOS (siga exatamente este formato):
 Usuário: toca Coldplay
@@ -2174,7 +2174,7 @@ Usuário: me acorda às seis e meia pra academia
 Você: Alarme das seis e meia criado. A academia agradece.
 [[alarme: 06:30 | Academia]]
 Usuário: manda pro João que eu chego em 10 minutos
-Você: Mensagem para o João a caminho.
+Você: Mensagem para o João pronta no WhatsApp, é só tocar em enviar.
 [[whatsapp: João | Chego em 10 minutos]]
 Usuário: abre o Instagram e põe um timer de 20 minutos
 Você: Instagram aberto e 20 minutos no relógio, para o senhor não se perder no feed.

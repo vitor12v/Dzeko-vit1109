@@ -39,7 +39,6 @@ import java.util.Locale;
 import java.util.TimeZone;
 import android.os.Handler;
 import android.os.Looper;
-import android.content.ComponentName;
 
 /**
  * Everything the assistant can do on the phone. Each method is called from the web app
@@ -327,10 +326,8 @@ public class Bridge {
         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
         if (installed("com.whatsapp")) i.setPackage("com.whatsapp");
         else if (installed("com.whatsapp.w4b")) i.setPackage("com.whatsapp.w4b");
-        boolean auto = DzekoAccess.instance != null && message != null && !message.trim().isEmpty();
-        if (auto) DzekoAccess.armSend(num.isEmpty() ? 30000 : 12000);
         if (!start(i)) return "failed";
-        return auto ? "sending" : "opened";
+        return "opened";
     }
 
     /** Best phone number for a contact name ("Mãe", "João Silva"), or null. */
@@ -371,35 +368,14 @@ public class Bridge {
         act.ask(new String[]{Manifest.permission.READ_CONTACTS}, MainActivity.REQ_CONTACTS);
     }
 
-    // ---------------------------------------------------------------- phone control (accessibility)
+    // ---------------------------------------------------------------- phone control
+    // No accessibility service: in Brazil, Play Protect blocks sideloaded apps that declare one.
 
     @JavascriptInterface
-    public boolean accessEnabled() {
-        if (DzekoAccess.instance != null) return true;
-        try {
-            String on = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            String me = new ComponentName(ctx, DzekoAccess.class).flattenToString();
-            String meShort = new ComponentName(ctx, DzekoAccess.class).flattenToShortString();
-            return on != null && (on.contains(me) || on.contains(meShort));
-        } catch (Exception e) {
-            return false;
-        }
-    }
+    public boolean accessEnabled() { return false; }
 
     @JavascriptInterface
-    public void openAccessSettings() {
-        start(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-    }
-
-    /** voltar, inicio, recentes, notificacoes, bloquear, print */
-    @JavascriptInterface
-    public boolean globalAction(String what) {
-        DzekoAccess a = DzekoAccess.instance;
-        if (a == null) return false;
-        final boolean[] ok = {false};
-        try { ok[0] = a.global(what); } catch (Exception ignored) { }
-        return ok[0];
-    }
+    public boolean globalAction(String what) { return false; }
 
     // ---------------------------------------------------------------- calendar
 
