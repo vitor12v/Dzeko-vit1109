@@ -185,6 +185,28 @@ public class Bridge {
         return start(i) || openUrl("https://music.youtube.com/search?q=" + Uri.encode(query));
     }
 
+    /** Controls whatever is playing (Spotify, YouTube Music...): play, pause, play_pause, next, previous. */
+    @JavascriptInterface
+    public boolean mediaKey(String key) {
+        int code;
+        String k = key == null ? "" : key.toLowerCase(Locale.ROOT);
+        switch (k) {
+            case "next": code = android.view.KeyEvent.KEYCODE_MEDIA_NEXT; break;
+            case "previous": code = android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS; break;
+            case "pause": code = android.view.KeyEvent.KEYCODE_MEDIA_PAUSE; break;
+            case "play": code = android.view.KeyEvent.KEYCODE_MEDIA_PLAY; break;
+            default: code = android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE; break;
+        }
+        try {
+            AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+            am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code));
+            am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /** Starts turn-by-turn navigation in Google Maps. mode: carro, a pé, bicicleta, moto. */
     @JavascriptInterface
     public boolean navigate(String destination, String mode) {
