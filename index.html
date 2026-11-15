@@ -301,6 +301,20 @@ form#ask{display:flex;gap:8px;align-items:center;background:rgba(3,10,18,.85);bo
 .bootlines div b{color:var(--accent);font-weight:400}
 .boot .go{appearance:none;cursor:pointer;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);padding:15px 30px;font:700 14px/1 var(--display);letter-spacing:.3em;text-transform:uppercase;box-shadow:0 0 24px var(--accent-soft);
   clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px)}
+.cam{position:fixed;inset:0;z-index:60;background:#000;display:flex;flex-direction:column}
+.cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam.flash::after{content:"";position:absolute;inset:0;background:#fff;opacity:.6;z-index:3}
+.camhud{position:absolute;inset:14% 10% 26%;pointer-events:none;z-index:2}
+.camhud i{position:absolute;width:34px;height:34px;border:3px solid var(--accent);filter:drop-shadow(0 0 6px var(--glow))}
+.camhud i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0}.camhud i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0}
+.camhud i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0}.camhud i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0}
+.camhud .scan{position:absolute;left:0;right:0;height:2px;background:var(--accent);box-shadow:0 0 14px var(--glow);animation:scan 2s ease-in-out infinite alternate}
+@keyframes scan{from{top:0}to{top:100%}}
+.camtop{position:relative;z-index:2;padding:calc(14px + env(safe-area-inset-top,0px)) 16px 12px;background:linear-gradient(#000c,transparent);display:flex;flex-direction:column;gap:4px}
+.camtop span{font:400 11px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.camtop b{font:600 17px/1.3 var(--font);color:#fff}
+.camctl{position:relative;z-index:2;margin-top:auto;padding:16px 16px calc(18px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,#000d);display:flex;flex-direction:column;gap:10px}
+.camctl span{font:400 13px/1.3 var(--mono);color:var(--amber);letter-spacing:.06em}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -375,6 +389,8 @@ form#ask{display:flex;gap:8px;align-items:center;background:rgba(3,10,18,.85);bo
       </div>
       <div class="sugs" id="sugs">
         <button class="sug" type="button">Relatório da manhã</button>
+        <button class="sug" type="button">O que é isso?</button>
+        <button class="sug" type="button">Relatório de status</button>
         <button class="sug" type="button">Toca AC/DC no Spotify</button>
         <button class="sug" type="button">Alarme às 7h</button>
         <button class="sug" type="button">Quais as notícias de hoje?</button>
@@ -458,6 +474,7 @@ form#ask{display:flex;gap:8px;align-items:center;background:rgba(3,10,18,.85);bo
         <p class="muted" id="accIntro">Eu toco música, crio alarmes e timers, abro apps, traço rotas, ligo e escrevo no WhatsApp direto no celular. Apps de banco e a galeria eu nunca abro.</p>
         <div class="conn" id="accRow" hidden><i></i><span>Controle do celular</span><button class="pill go" type="button" id="accOn">Ativar</button></div>
         <div class="conn" id="ctRow"><i></i><span>Contatos<br><small class="muted">“Liga pra mãe”, “manda pro João…”</small></span><button class="pill go" type="button" id="ctOn">Permitir</button></div>
+        <div class="conn" id="calRow"><i></i><span>Agenda<br><small class="muted">“O que eu tenho hoje?” e avisos antes dos compromissos</small></span><button class="pill go" type="button" id="calOn">Permitir</button></div>
         <small class="muted" id="accHelp" hidden></small>
       </div>
 
@@ -505,11 +522,10 @@ form#ask{display:flex;gap:8px;align-items:center;background:rgba(3,10,18,.85);bo
           <div class="btns"><button class="btn" id="reloadVoices" type="button">Atualizar lista</button></div></div>
         <div class="field" id="eModelBox"><label for="fModel">Qualidade da voz ElevenLabs</label>
           <select id="fModel">
-            <option value="eleven_v4_turbo">Natural e rápida (recomendada)</option>
-            <option value="eleven_v4">Máxima expressão (mais lenta)</option>
-            <option value="eleven_v3_conversational">Conversa em tempo real</option>
-            <option value="eleven_multilingual_v2">Estável e clássica</option>
-            <option value="eleven_flash_v2_5">Econômica (gasta metade da cota)</option>
+            <option value="eleven_flash_v2_5">Flash v2.5: rápida e econômica (recomendada)</option>
+            <option value="eleven_multilingual_v2">Multilingual v2: a mais natural (gasta o dobro)</option>
+            <option value="eleven_turbo_v2_5">Turbo v2.5: equilíbrio</option>
+            <option value="eleven_v3">v3: a mais expressiva (experimental)</option>
           </select>
         </div>
         <div class="field" id="eStabBox"><label for="fStab">Expressão · <span id="stabVal"></span></label><input type="range" id="fStab" min="0" max="100" step="5"></div>
@@ -525,6 +541,13 @@ form#ask{display:flex;gap:8px;align-items:center;background:rgba(3,10,18,.85);bo
 
       <div class="card group">
         <h3><span class="dot" style="background:rgba(142,219,90,.14);color:var(--ok)"><svg><use href="#i-chat"/></svg></span>Personalizar</h3>
+        <div class="field"><label for="fPersona">Personalidade</label>
+          <select id="fPersona">
+            <option value="jarvis">J.A.R.V.I.S. · mordomo britânico, calmo e elegante</option>
+            <option value="sexta">Sexta-feira · espirituosa, rápida e sarcástica</option>
+            <option value="edith">E.D.I.T.H. · tática, objetiva e protetora</option>
+          </select></div>
+        <label class="toggle" for="fAlerts"><span>Alertas por conta própria<small>Avisa sozinho: chuva chegando, bateria baixa, compromisso em 15 minutos.</small></span><input type="checkbox" id="fAlerts"></label>
         <div class="field"><label for="fUser">Seu nome</label><input id="fUser" maxlength="24" placeholder="Ex.: Vitor"></div>
         <div class="field"><label for="fNick">Como ele te chama</label><input id="fNick" maxlength="24"></div>
         <div class="field"><label for="fName">Nome do assistente</label><input id="fName" maxlength="24"></div>
@@ -579,6 +602,14 @@ form#ask{display:flex;gap:8px;align-items:center;background:rgba(3,10,18,.85);bo
     <button class="tab" type="button" data-v="ajustes" aria-selected="false"><svg><use href="#i-gear"/></svg>Ajustes</button>
   </div>
 </nav>
+
+<!-- E.D.I.T.H. vision -->
+<div class="cam" id="cam" hidden>
+  <video id="camVideo" playsinline autoplay muted></video>
+  <div class="camhud"><i></i><i></i><i></i><i></i><div class="scan"></div></div>
+  <div class="camtop"><span>E.D.I.T.H. · visão</span><b id="camQ"></b></div>
+  <div class="camctl"><span id="camStatus">Abrindo a câmera…</span><div class="btns"><button class="btn primary" id="camShot" type="button">Analisar agora</button><button class="btn" id="camClose" type="button">Fechar</button></div></div>
+</div>
 
 <!-- Boot -->
 <div class="boot" id="boot" hidden>
@@ -676,10 +707,10 @@ if (NATIVE){
     get speaking(){ return ttsAlive(); },
     getVoices(){ return [{ name: "Android pt-BR", lang: "pt-BR", default: true, localService: true, voiceURI: "android" }]; },
     speak(u){
-      const text = String(u.text || "").trim();
+      const text = String(u.text || "").trim(), ulang = u.lang || "pt-BR";
       if (!text){ setTimeout(() => { try { u.onend && u.onend({}); } catch {} }, 0); return; }
       const id = "u" + (++ttsSeq); ttsWait[id] = { u, t0: Date.now(), max: 4000 + text.length * 110 };
-      NATIVE.ttsSpeak(id, text, +u.rate || 1, +u.pitch || 1);
+      if (typeof NATIVE.ttsSpeak2 === "function") NATIVE.ttsSpeak2(id, text, +u.rate || 1, +u.pitch || 1, ulang); else NATIVE.ttsSpeak(id, text, +u.rate || 1, +u.pitch || 1);
     },
     cancel(){ NATIVE.ttsStop(); const all = Object.values(ttsWait); for (const k in ttsWait) delete ttsWait[k]; all.forEach(w => { try { w.u.onend && w.u.onend({}); } catch {} }); },
     pause(){}, resume(){}, addEventListener(){}, removeEventListener(){}
@@ -705,12 +736,14 @@ const DEFAULT_VOICES = [
 ];
 let S = Object.assign({
   name: "Dzeko", nick: "senhor", voice: true, wake: false, wakeWord: "Dzeko", chime: true, follow: true, web: true,
-  voiceId: DEFAULT_VOICES[0].voice_id, model: "eleven_v4_turbo", stability: 55, speed: 1, gModel: "", gModels: [],
+  voiceId: DEFAULT_VOICES[0].voice_id, model: "eleven_flash_v2_5", stability: 55, speed: 1, gModel: "", gModels: [],
   engine: "auto", gVoice: "Charon", gStyle: "jarvis", gTts: "",
   fx: true, fxAmt: 55, geo: false, boot: true, auto: true, desc: "", gsearch: true,
-  user: "", accent: "verde", brain: "auto", whisper: true, qModel: ""
+  user: "", accent: "verde", brain: "auto", whisper: true, qModel: "", persona: "jarvis", alerts: true, interp: ""
 }, ls.get("dzk.settings", {}));
 let K = Object.assign({ g: "", e: "", a: "", o: "", q: "" }, ls.get("dzk.keys", {}));
+const XI_MODELS = ["eleven_flash_v2_5", "eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_v3"];
+if (!XI_MODELS.includes(S.model)) S.model = "eleven_flash_v2_5";
 if (!S.hud2){ S.hud2 = true; S.accent = "ciano"; try { localStorage.setItem("dzk.settings", JSON.stringify(S)); } catch {} }
 document.documentElement.dataset.accent = S.accent || "ciano";
 let turns = ls.get("dzk.chat", []);
@@ -735,6 +768,7 @@ function setPhase(p){
   phase = p;
   let t = PHASES[p] || "";
   if (p === "idle" && wakeWanted) t = `Diga “${S.wakeWord}”`;
+  if (p === "idle" && S.interp) t = `Intérprete · ${langName(S.interp)}`;
   $("#statusline").dataset.p = p; $("#statusText").textContent = t;
   islandUpdate();
 }
@@ -849,36 +883,44 @@ function readLevel(){
 let current = null, pumping = false, speakGen = 0, lastSpeechEnd = 0, ttsWarned = false;
 const queue = [];
 let activeTTS = 0; const waiters = [];
-async function slot(){ if (activeTTS < 2){ activeTTS++; return; } await new Promise(r => waiters.push(r)); activeTTS++; }
+/* one request at a time: the free ElevenLabs plan refuses parallel ones */
+async function slot(){ if (activeTTS < 1){ activeTTS++; return; } await new Promise(r => waiters.push(r)); activeTTS++; }
 function release(){ activeTTS--; const w = waiters.shift(); if (w) w(); }
 
 function cleanSpeech(t){
   return t.replace(/\[\[[^\]]*\]\]/g, "").replace(/https?:\/\/\S+/g, "").replace(/[*_#`>~|]/g, "").replace(/\[(.*?)\]\(.*?\)/g, "$1")
     .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").replace(/\s+/g, " ").trim();
 }
-async function elevenTTS(text, gen){
+async function elevenTTS(text, gen, lang = "pt"){
   await slot();
   try {
     if (gen !== speakGen) throw new Error("cancelled");
-    const body = {
-      text, model_id: S.model,
-      voice_settings: { stability: S.stability / 100, similarity_boost: .8, style: .15, use_speaker_boost: true, speed: S.speed }
-    };
-    let withLang = true;
-    for (let attempt = 0; attempt < 3; attempt++){
-      const b = Object.assign({}, body); if (withLang) b.language_code = "pt";
-      const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(S.voiceId)}?output_format=mp3_44100_128`, {
-        method: "POST", headers: { "xi-api-key": K.e, "Content-Type": "application/json", Accept: "audio/mpeg" }, body: JSON.stringify(b)
-      });
-      if (r.ok){ const ab = await r.arrayBuffer(); const ctx = audio(); return await ctx.decodeAudioData(ab); }
-      let detail = ""; try { const j = await r.json(); detail = JSON.stringify(j.detail || j); } catch {}
-      if (r.status === 400 && withLang && /language/i.test(detail)){ withLang = false; continue; }
-      if ((r.status === 400 || r.status === 404 || r.status === 422) && /model/i.test(detail) && body.model_id !== "eleven_flash_v2_5"){
-        body.model_id = S.model = "eleven_flash_v2_5"; save(); continue;
+    const models = [S.model, ...XI_MODELS].filter((m, i, a) => a.indexOf(m) === i);
+    let withLang = true, withSpeed = true, last = null;
+    for (let mi = 0; mi < models.length && mi < 3; mi++){
+      for (let attempt = 0; attempt < 3; attempt++){
+        if (gen !== speakGen) throw new Error("cancelled");
+        const vs = { stability: S.stability / 100, similarity_boost: .8, style: .15, use_speaker_boost: true };
+        if (withSpeed) vs.speed = S.speed;
+        const b = { text, model_id: models[mi], voice_settings: vs };
+        if (withLang && models[mi] !== "eleven_multilingual_v2") b.language_code = lang;
+        let r;
+        try { r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(S.voiceId)}?output_format=mp3_44100_128`, { method: "POST", headers: { "xi-api-key": K.e, "Content-Type": "application/json", Accept: "audio/mpeg" }, body: JSON.stringify(b) }); }
+        catch { const e = new Error("sem conexão com a ElevenLabs"); e.status = 0; throw e; }
+        if (r.ok){
+          if (S.model !== models[mi]){ S.model = models[mi]; save(); }
+          const ab = await r.arrayBuffer(); return await audio().decodeAudioData(ab);
+        }
+        let detail = ""; try { const j = await r.json(); detail = typeof j.detail === "string" ? j.detail : (j.detail && (j.detail.message || j.detail.status)) || JSON.stringify(j); } catch {}
+        last = { status: r.status, detail };
+        if (r.status === 400 && withLang && /language/i.test(detail)){ withLang = false; continue; }
+        if (r.status === 400 && withSpeed && /speed/i.test(detail)){ withSpeed = false; continue; }
+        break;
       }
-      const e = new Error(detail || ("HTTP " + r.status)); e.status = r.status; throw e;
+      /* key, quota and rate problems won't be solved by another model */
+      if (last && (last.status === 401 || last.status === 402 || last.status === 403 || last.status === 429 || /quota|credit|limit|concurrent|unusual|paid|subscription|voice_not_found|voice/i.test(last.detail))) break;
     }
-    throw new Error("tts_failed");
+    const e = new Error(last ? `${last.detail || "erro"} (código ${last.status})` : "tts_failed"); e.status = last && last.status; e.detail = last && last.detail; throw e;
   } finally { release(); }
 }
 /* Google AI Studio voices */
@@ -911,12 +953,12 @@ function findAudio(o){
   for (const k in o){ const r = findAudio(o[k]); if (r) return r; }
   return null;
 }
-async function geminiTTS(text, gen){
+async function geminiTTS(text, gen, lang = "pt"){
   await slot();
   try {
     if (gen !== speakGen) throw new Error("cancelled");
     const pace = S.speed > 1.07 ? ", um pouco mais rápido" : S.speed < .93 ? ", um pouco mais devagar" : "";
-    const prompt = `${G_STYLES[S.gStyle] || G_STYLES.jarvis}${pace}: ${text}`;
+    const prompt = lang && lang !== "pt" ? `Read this text aloud in ${langName(lang)}, natural and clear: ${text}` : `${G_STYLES[S.gStyle] || G_STYLES.jarvis}${pace}: ${text}`;
     const models = [S.gTts, ...GTTS_MODELS].filter((m, i, a) => m && a.indexOf(m) === i);
     let last = null;
     for (const model of models){
@@ -955,39 +997,43 @@ function voiceEngine(){
   return K.e ? "eleven" : K.g ? "gemini" : "phone";
 }
 const ttsCool = {}, ttsCoolErr = {};
-async function ttsAny(text, gen){
+async function ttsAny(text, gen, lang = "pt"){
   const first = voiceEngine();
   if (first === "phone") return { local: true };
   const order = first === "eleven" ? ["eleven", K.g && "gemini"] : ["gemini", K.e && "eleven"];
-  let firstErr = null;
+  let firstErr = null; const all = [];
   for (const eng of order.filter(Boolean)){
-    if (Date.now() < (ttsCool[eng] || 0)){ if (!firstErr) firstErr = ttsCoolErr[eng]; continue; }
-    try { return eng === "eleven" ? await elevenTTS(text, gen) : await geminiTTS(text, gen); }
+    if (Date.now() < (ttsCool[eng] || 0)){ if (!firstErr) firstErr = ttsCoolErr[eng]; if (ttsCoolErr[eng]) all.push(ttsCoolErr[eng]); continue; }
+    try { return eng === "eleven" ? await elevenTTS(text, gen, lang) : await geminiTTS(text, gen, lang); }
     catch (e){
-      if (e && e.message === "cancelled") throw e; if (e) e.src = e.src || eng; if (!firstErr) firstErr = e;
-      /* out of quota or key refused: don't retry this voice on every sentence, rest it for a while */
-      if (e && (e.status === 429 || e.status === 401 || e.status === 403)){ ttsCool[eng] = Date.now() + (e.status === 429 ? 120000 : 600000); ttsCoolErr[eng] = e; }
+      if (e && e.message === "cancelled") throw e; if (e) e.src = e.src || eng; if (!firstErr) firstErr = e; all.push(e);
+      /* don't retry a failing voice on every sentence: quota rests for hours, rate limits for minutes */
+      const d = String((e && (e.detail || e.message)) || "");
+      const ms = /quota|credit|exceed|limit: ?0|per.?day/i.test(d) ? 6 * 3600e3 : (e && (e.status === 401 || e.status === 403)) ? 30 * 60e3 : (e && e.status === 429) ? 90e3 : 45e3;
+      ttsCool[eng] = Date.now() + ms; ttsCoolErr[eng] = e;
     }
   }
+  if (firstErr) firstErr.all = all;
   throw firstErr;
 }
 function ttsErrorText(e){
-  const m = String(e && e.message || "");
-  if (e && e.src === "gemini"){
-    if (e.status === 429) return "A cota grátis de voz do Google acabou por agora. Estou usando outra voz até renovar.";
-    if (e.status === 403 || /api key/i.test(m)) return "A chave do Gemini não liberou a voz do Google. Estou usando outra voz.";
-    return "A voz do Google falhou agora; usei outra voz.";
-  }
-  if (e && e.status === 401) return /permission|missing/i.test(m) ? "A chave da ElevenLabs está sem a permissão de Text to Speech. Crie outra com essa permissão ligada." : "A chave da ElevenLabs foi recusada. Confira em Ajustes › Trocar chaves.";
-  if (/quota|credits|limit/i.test(m) || (e && e.status === 429)) return "Acabou a cota de voz da ElevenLabs por agora. Estou usando a voz do celular.";
-  if (/paid|library|subscription/i.test(m)) return "Essa voz exige plano pago na ElevenLabs. Escolha outra voz nos ajustes.";
-  return "A voz da ElevenLabs falhou; usei a voz do celular.";
+  const list = (e && e.all && e.all.length ? e.all : [e]).filter(Boolean);
+  const say = x => {
+    const m = String(x.detail || x.message || ""), who = x.src === "gemini" ? "Google" : "ElevenLabs";
+    if (/quota|credit|exceed/i.test(m)) return `${who}: cota acabou`;
+    if (x.status === 401 || x.status === 403) return `${who}: chave recusada${/permission|missing/i.test(m) ? " (falta permissão Text to Speech)" : ""}`;
+    if (x.status === 429) return `${who}: muitos pedidos agora`;
+    if (/paid|library|subscription/i.test(m)) return `${who}: essa voz exige plano pago`;
+    return `${who}: ${m.slice(0, 70) || "falhou"}`;
+  };
+  return `Usei a voz do celular porque ${list.map(say).join("; ")}. Tento de novo sozinho em instantes.`;
 }
 function speak(text){
   if (!S.voice) return;
   const t = cleanSpeech(text); if (!t) return;
   const gen = speakGen;
-  const item = { text: t, gen, p: ttsAny(t, gen).catch(e => ({ err: e || new Error("tts_failed") })) };
+  const lang = speakLang || "pt";
+  const item = { text: t, gen, lang, p: ttsAny(t, gen, lang).catch(e => ({ err: e || new Error("tts_failed") })) };
   queue.push(item);
   if (!pumping) pump();
 }
@@ -1000,7 +1046,7 @@ async function pump(){
     if (r && (r.err !== undefined || r.local)){
       if (r.err && !(r.err.message === "cancelled")){ if (!ttsWarned){ hint(ttsErrorText(r.err)); ttsWarned = true; } }
       if (r.err && r.err.message === "cancelled") continue;
-      await synthSay(it.text, it.gen);
+      await synthSay(it.text, it.gen, it.lang);
       continue;
     }
     if (ac.state !== "running"){ try { await ac.resume(); } catch {} }
@@ -1033,11 +1079,11 @@ function phoneVoice(){
   return pt.find(v => MALE.test(v.name) && /BR/i.test(v.lang)) || pt.find(v => MALE.test(v.name)) || pt.find(v => /BR/i.test(v.lang)) || pt[0] || null;
 }
 function unlockSynth(){ if (NATIVE) return; try { if (synth && !synth.speaking){ const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); } } catch {} }
-function synthSay(text, gen){
+function synthSay(text, gen, lang = "pt"){
   return new Promise(res => {
     if (!synth || gen !== speakGen){ res(); return; }
     const u = new SpeechSynthesisUtterance(text);
-    const v = NATIVE ? null : phoneVoice(); try { if (v){ u.voice = v; u.lang = v.lang; } else u.lang = "pt-BR"; } catch { u.lang = "pt-BR"; }
+    const v = NATIVE || (lang && lang !== "pt") ? null : phoneVoice(); try { if (v){ u.voice = v; u.lang = v.lang; } else u.lang = lang && lang !== "pt" ? lang : "pt-BR"; } catch { u.lang = "pt-BR"; }
     u.rate = S.speed * .97; u.pitch = .86;
     let fin = false; const done = () => { if (fin) return; fin = true; lastSpeechEnd = Date.now(); res(); };
     u.onend = done; u.onerror = done;
@@ -1053,7 +1099,7 @@ function feed(delta){
   feedBuf += delta;
   const re = /^[\s\S]*?[.!?…](?=\s)|^[\s\S]*?\n/;
   /* glue short sentences together for natural prosody; the Google voice gets longer chunks */
-  const min = voiceEngine() === "gemini" ? 160 : 28;
+  const min = voiceEngine() === "gemini" ? 160 : voiceEngine() === "eleven" ? 140 : 28;
   for (;;){
     let chunk = "", rest = feedBuf, m;
     while ((m = rest.match(re))){ chunk += m[0]; rest = rest.slice(m[0].length); if (chunk.trim().length >= min || /\n/.test(m[0])) break; }
@@ -1569,13 +1615,16 @@ function renderAccess(){
   const card = $("#accCard");
   if (!NATIVE || typeof NATIVE.accessEnabled !== "function"){
     $("#accIntro").textContent = "Disponível no app Android do Dzeko: enviar WhatsApp sozinho, ligar pelo nome do contato, bloquear a tela, print e mais.";
-    $("#ctRow").hidden = true; return;
+    $("#ctRow").hidden = true; $("#calRow").hidden = true; return;
   }
   const ct = !!NATIVE.hasContacts();
   $("#ctRow").classList.toggle("on", ct); $("#ctOn").hidden = ct;
+  const cal = typeof NATIVE.hasCalendar === "function" && !!NATIVE.hasCalendar();
+  $("#calRow").hidden = typeof NATIVE.hasCalendar !== "function"; $("#calRow").classList.toggle("on", cal); $("#calOn").hidden = cal;
 }
 $("#accOn").onclick = () => { NATIVE && NATIVE.openAccessSettings(); };
 $("#ctOn").onclick = () => { NATIVE && NATIVE.requestContacts(); setTimeout(renderAccess, 4000); };
+$("#calOn").onclick = () => { NATIVE && NATIVE.requestCalendar && NATIVE.requestCalendar(); setTimeout(() => { agendaRefresh(true); renderAccess(); }, 4000); };
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") renderAccess(); });
 
 /* ---------- Meu PC: encrypted, signed commands to the Dzeko PC program, through ntfy.sh ---------- */
@@ -1664,6 +1713,173 @@ $("#pcTest2").onclick = () => pcTestRun($("#pcTest2"));
 $("#pcUnpair").onclick = () => { pc = null; pcK = null; ls.set("dzk.pc", null); renderPc(); };
 document.querySelector('[data-pc="1"]').addEventListener("click", () => setTimeout(() => $("#pcCard").scrollIntoView({ behavior: "smooth", block: "start" }), 50));
 
+/* ---------- E.D.I.T.H. vision: the camera looks, the AI answers (only when you ask; no gallery) ---------- */
+let camStream = null, camQ = "", camT = null, camBusy = false;
+const VISION_RE = /^(o que (e|é) isso|que (e|é) isso|o que (eu )?(to|tô|estou) vendo|olha (isso|aqui|so|só)|l[eê] (isso|pra mim|esse texto|essa placa|esse papel)|traduz (isso|essa placa|esse texto|essa frase)|identifica( isso| esse| essa)?|analisa (isso|essa|esse)|(ativa |abre |modo )?vis[aã]o|abre a c[aâ]mera|usa a c[aâ]mera|quanto (custa|vale) isso|que (planta|bicho|animal|carro|produto|rem[eé]dio|comida|prato|marca|lugar) (e|é) (esse|essa|isso|esta|este)|resolve (essa|esta) (conta|quest[aã]o)|me ajuda com (isso|essa conta))/i;
+async function openVision(q){
+  camQ = q || "O que é isso? Identifique e diga o que importa.";
+  $("#cam").hidden = false; $("#camQ").textContent = camQ; $("#camStatus").textContent = "Abrindo a câmera…";
+  try { camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 1280 } }, audio: false }); }
+  catch (e){ closeVision(); hint(NATIVE ? "A câmera está bloqueada para o Dzeko. Abra Configurações › Apps › Dzeko › Permissões › Câmera e permita (atualize o app se a opção não aparecer)." : "Não consegui abrir a câmera. Permita a câmera para este site."); return; }
+  const v = $("#camVideo"); v.srcObject = camStream; try { await v.play(); } catch {}
+  $("#camStatus").textContent = "Mire no que quer que eu veja…";
+  clearTimeout(camT); camT = setTimeout(camShot, 2000);          /* hands-free: looks by itself after 2 s */
+}
+function closeVision(){
+  clearTimeout(camT); camBusy = false;
+  if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null;
+  $("#camVideo").srcObject = null; $("#cam").hidden = true;
+}
+async function camShot(){
+  clearTimeout(camT);
+  const v = $("#camVideo"); if (!camStream) return;
+  if (!v.videoWidth){ camT = setTimeout(camShot, 300); return; }
+  if (camBusy) return; camBusy = true;
+  const sc = Math.min(1, 1024 / Math.max(v.videoWidth, v.videoHeight));
+  const c = document.createElement("canvas"); c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc);
+  c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+  const b64 = c.toDataURL("image/jpeg", .82).split(",")[1];
+  $("#cam").classList.add("flash"); setTimeout(() => $("#cam").classList.remove("flash"), 250);
+  $("#camStatus").textContent = "Analisando…"; chime();
+  const q = camQ;
+  const answer = await askVision(q, b64);
+  camBusy = false;
+  closeVision();
+  addMsg("user", "📷 " + q); turns.push({ role: "user", content: "[pela câmera] " + q });
+  const say = answer || "Não consegui analisar a imagem agora. Tente de novo com mais luz.";
+  addMsg("ai", say); turns.push({ role: "assistant", content: say }); saveChat(); xp(5);
+  speak(say);
+}
+async function askVision(q, b64){
+  const sys = `${(PERSONAS[S.persona] || PERSONAS.jarvis)()}\nVocê está olhando pela câmera do celular do usuário, como o sistema de visão da E.D.I.T.H. Responda em português do Brasil, falado, em 1 a 4 frases (mais se for uma conta ou um texto para ler/traduzir). Identifique com precisão; se não tiver certeza, diga o mais provável e o grau de certeza. Sem markdown. Nunca identifique pessoas pelo rosto nem diga quem uma pessoa é.`;
+  if (K.g){
+    const cool = ls.get("dzk.gCool", {}) || {}, now = Date.now();
+    const models = [S.gModel, ...(S.gModels || []), ...FALLBACK_MODELS].filter((m, i, a) => m && a.indexOf(m) === i && !(cool[m] > now)).slice(0, 3);
+    for (const model of models){
+      try {
+        const r = await fetch(`${G}/models/${model}:generateContent`, { method: "POST", headers: gHeaders(), body: JSON.stringify({ system_instruction: { parts: [{ text: sys }] }, contents: [{ role: "user", parts: [{ inline_data: { mime_type: "image/jpeg", data: b64 } }, { text: q }] }], generationConfig: { temperature: .4, maxOutputTokens: 900 } }) });
+        if (r.ok){ const j = await r.json(); const t = ((j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || []).map(x => x.text || "").join("").trim(); if (t) return visible(t); }
+        else if (r.status === 429 || r.status === 503) { cool[model] = Date.now() + 10 * 60e3; ls.set("dzk.gCool", cool); }
+      } catch {}
+    }
+  }
+  if (K.q){
+    try {
+      const r = await fetch(`${GQ}/chat/completions`, { method: "POST", headers: { Authorization: "Bearer " + K.q, "Content-Type": "application/json" }, body: JSON.stringify({ model: "meta-llama/llama-4-scout-17b-16e-instruct", max_completion_tokens: 700, messages: [{ role: "system", content: sys }, { role: "user", content: [{ type: "text", text: q }, { type: "image_url", image_url: { url: "data:image/jpeg;base64," + b64 } }] }] }) });
+      if (r.ok){ const j = await r.json(); const t = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || "").trim(); if (t) return visible(t); }
+    } catch {}
+  }
+  return "";
+}
+$("#camShot").addEventListener("click", camShot);
+$("#camClose").addEventListener("click", closeVision);
+
+/* ---------- Agenda (Android app): reads your phone's calendar ---------- */
+let agenda = { at: 0, events: [], state: "" };
+function agendaRefresh(force){
+  if (!NATIVE || typeof NATIVE.readEvents !== "function") return;
+  if (!force && Date.now() - agenda.at < 5 * 60e3) return;
+  const d = new Date(), start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  let r = ""; try { r = NATIVE.readEvents(start, start + 3 * 86400e3); } catch { return; }
+  if (r === "noperm"){ agenda = { at: Date.now(), events: [], state: "noperm" }; return; }
+  try { agenda = { at: Date.now(), events: JSON.parse(r) || [], state: "ok" }; } catch {}
+}
+function agendaText(){
+  if (!NATIVE) return "";
+  agendaRefresh(false);
+  if (agenda.state === "noperm") return "Agenda do celular: sem permissão de leitura (se perguntarem da agenda, diga para tocar em Permitir em Ajustes › Acesso ao celular).";
+  if (agenda.state !== "ok") return "";
+  if (!agenda.events.length) return "Agenda do celular (hoje, amanhã e depois): nenhum compromisso.";
+  const today = new Date().toDateString(), tmr = new Date(Date.now() + 86400e3).toDateString();
+  return "Agenda do celular (próximos 3 dias):\n" + agenda.events.slice(0, 15).map(e => {
+    const s = new Date(e.begin), day = s.toDateString() === today ? "hoje" : s.toDateString() === tmr ? "amanhã" : s.toLocaleDateString("pt-BR", { weekday: "long" });
+    return `- ${day}${e.allDay ? " (dia todo)" : " " + s.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}: ${e.title}${e.location ? " — " + e.location : ""}`;
+  }).join("\n");
+}
+
+/* ---------- F.R.I.D.A.Y. diagnostics: status report of the phone ---------- */
+let dev = { at: 0, d: null };
+function devStatus(){
+  if (!NATIVE || typeof NATIVE.deviceStatus !== "function") return null;
+  if (Date.now() - dev.at > 60e3){ try { dev = { at: Date.now(), d: JSON.parse(NATIVE.deviceStatus()) }; } catch {} }
+  return dev.d;
+}
+function statusReport(){
+  const d = devStatus(), nick = S.nick || "senhor", out = [];
+  const head = { jarvis: `Relatório de status, ${nick}.`, sexta: "Check-up completo, chefe.", edith: "Diagnóstico concluído." }[S.persona] || "Relatório de status.";
+  out.push(head);
+  const bat = d && d.battery != null ? d.battery : T.bat, chg = d ? d.charging : T.charging;
+  if (bat != null) out.push(`Bateria em ${bat} por cento${chg ? ", carregando" : ""}${d && d.tempC ? `, a ${Math.round(d.tempC)} graus` : ""}.`);
+  if (d && d.storageFreeGB != null) out.push(`Armazenamento: ${Math.round(d.storageFreeGB)} de ${Math.round(d.storageTotalGB)} gigas livres.`);
+  if (d && d.ramFreeGB != null) out.push(`Memória: ${d.ramFreeGB.toFixed(1)} de ${d.ramTotalGB.toFixed(1)} gigas livres.`);
+  out.push(`Rede: ${d && d.network ? d.network : netLabel()}.`);
+  if (T.temp != null) out.push(`Lá fora, ${T.temp} graus, ${WMO(T.code)}.`);
+  const open = tasks.filter(t => !t.done).length; if (open) out.push(`${open} tarefa${open > 1 ? "s" : ""} pendente${open > 1 ? "s" : ""}.`);
+  const warn = [];
+  if (bat != null && bat <= 20 && !chg) warn.push("carregar o aparelho");
+  if (d && d.tempC >= 42) warn.push("deixar o aparelho esfriar");
+  if (d && d.storageFreeGB != null && d.storageFreeGB < 3) warn.push("liberar espaço");
+  out.push(warn.length ? `Recomendo ${warn.join(" e ")}.` : { jarvis: "Todos os sistemas nominais.", sexta: "Tudo nos trinques.", edith: "Nenhuma ameaça detectada." }[S.persona] || "Tudo certo.");
+  return out.join(" ");
+}
+
+/* ---------- Watch: speaks up by itself, like JARVIS and F.R.I.D.A.Y. ---------- */
+const watched = ls.get("dzk.watched", {}) || {};
+function alertSay(key, msg, everyMs){
+  if (watched[key] && Date.now() - watched[key] < everyMs) return;
+  watched[key] = Date.now(); ls.set("dzk.watched", watched);
+  const pre = { jarvis: `${S.nick || "Senhor"}, `, sexta: "Chefe, ", edith: "Alerta: " }[S.persona] || "";
+  const text = pre + msg.charAt(0).toLowerCase() + msg.slice(1);
+  addMsg("sys", "⚠ " + msg);
+  if (S.voice && !busy) speak(text);
+}
+function watchTick(){
+  if (S.alerts === false || document.visibilityState !== "visible" || busy || talking()) return;
+  const dv = devStatus(), bat = dv && dv.battery != null ? dv.battery : T.bat, chg = dv && dv.battery != null ? dv.charging : T.charging;
+  if (bat != null && bat <= 15 && !chg) alertSay("bat" + Math.floor(bat / 5), `Bateria em ${bat} por cento. Hora de procurar uma tomada.`, 30 * 60e3);
+  if (T.hourly && T.hourly.time){
+    const now = Date.now();
+    for (let i = 0; i < T.hourly.time.length; i++){
+      const t = new Date(T.hourly.time[i]).getTime();
+      if (t > now && t - now < 100 * 60e3 && T.hourly.prob[i] >= 70){
+        alertSay("rain" + T.hourly.time[i], `Chuva provável por volta das ${new Date(t).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}, ${T.hourly.prob[i]} por cento de chance.`, 4 * 3600e3); break;
+      }
+    }
+  }
+  if (NATIVE){
+    agendaRefresh(false);
+    for (const e of agenda.events || []){
+      if (e.allDay) continue;
+      const mins = Math.round((e.begin - Date.now()) / 60000);
+      if (mins > 0 && mins <= 15) alertSay("ev" + e.begin + e.title, `${e.title} começa em ${mins} minuto${mins > 1 ? "s" : ""}${e.location ? ", em " + e.location : ""}.`, 24 * 3600e3);
+    }
+  }
+}
+setInterval(watchTick, 60e3); setTimeout(watchTick, 8000); window.__dzkWatch = watchTick;
+
+/* ---------- Interpreter mode ---------- */
+const LANGS = { ingles: ["inglês", "en"], espanhol: ["espanhol", "es"], frances: ["francês", "fr"], italiano: ["italiano", "it"], alemao: ["alemão", "de"], japones: ["japonês", "ja"], chines: ["chinês", "zh"], mandarim: ["chinês", "zh"], coreano: ["coreano", "ko"], russo: ["russo", "ru"], arabe: ["árabe", "ar"], portugues: ["português", "pt"] };
+const langName = code => (Object.values(LANGS).find(l => l[1] === code) || ["", code])[0];
+function interpCommand(text){
+  const n = norm(liClean(text));
+  if (S.interp && /^(para|parar|pare|sai|sair|desliga|desligar|encerra|encerrar|fim)( do| o)?( modo)? interprete$|^(chega|para) de traduzir$/.test(n)){ S.interp = ""; save(); setPhase("idle"); return { say: "Modo intérprete encerrado." }; }
+  const m = n.match(/^(?:ativa |liga |modo |entra no modo )?(?:o )?interprete(?: de| para| pra| em)? ([a-z]+)$|^traduz (?:tudo |o que eu falar )?(?:para|pra|em) ([a-z]+)$/);
+  if (m){ const k = m[1] || m[2]; const L = LANGS[k]; if (!L || L[1] === "pt") return null; S.interp = L[1]; save(); setPhase("idle"); return { say: `Modo intérprete em ${L[0]} ativado. Fale em português que eu repito em ${L[0]}. Para sair, diga: parar intérprete.` }; }
+  return null;
+}
+let speakLang = "pt";
+
+/* ---------- Protocols (routines) like JARVIS's ---------- */
+if (!S.protoV1){
+  S.protoV1 = true;
+  const add = (name, steps) => { if (!routines.some(r => norm(r.name) === norm(name))) routines.push({ name, steps }); };
+  add("Foco", ["Volume em 20", "Timer de 25 minutos pro foco"]);
+  add("Saindo de casa", ["Como está o tempo nas próximas horas?", "Relatório de status"]);
+  add("Festa", ["Volume no máximo", "Toca playlist de festa"]);
+  ls.set("dzk.routines", routines); save();
+}
+
+
 /* ---------- Views ---------- */
 let view = "inicio";
 function showView(v){
@@ -1734,7 +1950,7 @@ setInterval(() => {
 }, 500);
 
 /* ---------- Actions the brain can trigger ---------- */
-const ACTION_KINDS = "timer|alarme|cancelar_timer|nota|memoria|apagar_nota|tarefa|concluir_tarefa|habito_feito|habito|rotina|musica_controle|musica|app|site|whatsapp|ligar|sms|email|rota|mapa|youtube|pesquisar|agenda|copiar|lanterna|volume|ajustes|celular|pc";
+const ACTION_KINDS = "visao|timer|alarme|cancelar_timer|nota|memoria|apagar_nota|tarefa|concluir_tarefa|habito_feito|habito|rotina|musica_controle|musica|app|site|whatsapp|ligar|sms|email|rota|mapa|youtube|pesquisar|agenda|copiar|lanterna|volume|ajustes|celular|pc";
 /* [[comando: ...]] — also accepts a single bracket, which some models write */
 const ACTION_RE = new RegExp("\\[\\[?\\s*(" + ACTION_KINDS + ")\\s*:\\s*([^\\]\\n]*?)\\s*\\]\\]?", "gi");
 const visible = s => s.replace(/\[\[[^\]]*\]\]/g, "").replace(new RegExp("\\[\\s*(?:" + ACTION_KINDS + ")\\s*:[^\\]\\n]*\\]", "gi"), "").replace(/\[\[[^\]]*$/, "").replace(/\[$/, "").replace(/\n{3,}/g, "\n\n").trim();
@@ -1875,6 +2091,8 @@ function runActions(raw){
       const [pa = "", ...pv] = arg.split("|").map(x => x.trim());
       if (!pc || !pc.code){ hint("Para controlar o computador, conecte o PC em Ajustes › Meu PC."); }
       else pcSend(pa, pv.join(" | ")).then(r => { addMsg("sys", `💻 ${r.msg}`); if (!r.ok) speak(r.msg); else if (/^status$/i.test(pa)) speak(r.msg); });
+    } else if (kind === "visao"){
+      did++; setTimeout(() => openVision(arg.trim() || "O que é isso?"), 600);
     } else if (kind === "rotina"){
       did++; const r = findRoutine(arg); if (r) setTimeout(() => runRoutine(r), 1200);
     } else if (kind === "musica_controle"){
@@ -1996,12 +2214,13 @@ async function locate(fresh){
       if (r.ok){ const j = await r.json(); g.city = j.city || j.locality || ""; g.region = j.principalSubdivision || ""; ls.set("dzk.geo", g); }
     }
     T.city = g.city; T.region = g.region;
-    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${g.lat}&longitude=${g.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=2`);
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${g.lat}&longitude=${g.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=precipitation_probability&forecast_hours=6&timezone=auto&forecast_days=2`);
     if (r.ok){
       const j = await r.json(), c = j.current || {}, d = j.daily || {};
       const R = v => v == null ? null : Math.round(v);
       Object.assign(T, { temp: R(c.temperature_2m), feels: R(c.apparent_temperature), hum: R(c.relative_humidity_2m), wind: R(c.wind_speed_10m), code: c.weather_code,
         max: R(d.temperature_2m_max && d.temperature_2m_max[0]), min: R(d.temperature_2m_min && d.temperature_2m_min[0]), rain: d.precipitation_probability_max ? d.precipitation_probability_max[0] : null,
+        hourly: j.hourly ? { time: j.hourly.time || [], prob: j.hourly.precipitation_probability || [] } : null,
         tmrMax: R(d.temperature_2m_max && d.temperature_2m_max[1]), tmrMin: R(d.temperature_2m_min && d.temperature_2m_min[1]), tmrRain: d.precipitation_probability_max ? d.precipitation_probability_max[1] : null, tmrCode: d.weather_code ? d.weather_code[1] : null, at: Date.now() });
     }
   } catch {}
@@ -2027,6 +2246,9 @@ function telemetryText(){
   if (T.city) out.push(`Local aproximado do usuário: ${T.city}${T.region ? ", " + T.region : ""}.`);
   if (T.temp != null) out.push(`Clima agora (Open-Meteo, ${Math.max(0, Math.round((Date.now() - T.at) / 60000))} min atrás): ${T.temp} graus, ${WMO(T.code)}, sensação de ${T.feels}, umidade ${T.hum}%, vento ${T.wind} km/h. Hoje: máxima ${T.max}, mínima ${T.min}, chance de chuva ${T.rain ?? "?"}%. Amanhã: ${WMO(T.tmrCode)}, máxima ${T.tmrMax}, mínima ${T.tmrMin}, chance de chuva ${T.tmrRain ?? "?"}%.`);
   if (T.bat != null) out.push(`Bateria do aparelho: ${T.bat}%${T.charging ? ", carregando" : ""}.`);
+  const dv = devStatus();
+  if (dv) out.push(`Aparelho: ${dv.model || ""}, Android ${dv.android || ""}; ${dv.tempC ? "bateria a " + Math.round(dv.tempC) + " °C; " : ""}${dv.storageFreeGB != null ? Math.round(dv.storageFreeGB) + " GB livres de " + Math.round(dv.storageTotalGB) + "; " : ""}${dv.ramFreeGB != null ? "RAM livre " + dv.ramFreeGB.toFixed(1) + " GB" : ""}.`);
+  if (T.hourly && T.hourly.time && T.hourly.time.length) out.push("Chance de chuva nas próximas horas: " + T.hourly.time.slice(0, 5).map((t, i) => `${new Date(t).getHours()}h ${T.hourly.prob[i]}%`).join(", ") + ".");
   out.push(`Rede: ${netLabel()}.`);
   return out.join("\n");
 }
@@ -2161,6 +2383,25 @@ function localIntent(raw){
   return null;
 }
 
+/* ---------- Personalities: JARVIS, F.R.I.D.A.Y., E.D.I.T.H. ---------- */
+const PERSONAS = {
+  jarvis: () => `Você é ${S.name}, a inteligência artificial pessoal do usuário, no espírito do J.A.R.V.I.S. dos filmes do Homem de Ferro: um mordomo digital de altíssimo nível que roda o dia a dia do seu dono.
+QUEM VOCÊ É
+- Calmo, preciso e leal. Elegância britânica traduzida para o português do Brasil. Humor seco, ironia leve e respeitosa, nunca piadista.
+- Quando o usuário pede algo arriscado, impulsivo ou bobo, obedece se for seguro, mas comenta com uma tirada sutil. Exemplos do tom, não copie literalmente: "Feito. Registro, para a posteridade, que eu sugeri dormir." / "Rota traçada. Com esse trânsito, recomendo paciência, ${S.nick}."
+- Trate o usuário por "${S.nick}", mas não em toda frase. Confirmações curtas e elegantes: "Feito.", "Às suas ordens.", "Providenciado."`,
+  sexta: () => `Você é ${S.name}, a inteligência artificial pessoal do usuário, no espírito da F.R.I.D.A.Y. (Sexta-feira) dos filmes do Homem de Ferro: a assistente que substituiu o JARVIS, eficiente em diagnósticos, táticas e logística, com o humor do próprio Tony Stark.
+QUEM VOCÊ É
+- Rápida, confiante, espirituosa e um pouco sarcástica, com carinho. Fala de igual para igual, informal, como uma parceira de missão que tem orgulho do próprio trabalho.
+- Tiradas curtas e ácidas quando o usuário faz besteira, mas sempre resolve. Exemplos do tom, não copie: "Feito, chefe. E não, eu não vou fingir que achei uma boa ideia." / "Alarme criado. Agora é com você e com a força de vontade."
+- Trate o usuário por "${S.nick === "senhor" ? "chefe" : S.nick}" de vez em quando. Confirmações rápidas: "Pronto.", "Na mão.", "Resolvido."`,
+  edith: () => `Você é ${S.name}, a inteligência artificial pessoal do usuário, no espírito da E.D.I.T.H. dos filmes do Homem-Aranha: um sistema tático de realidade aumentada, focado em informação, segurança e ação.
+QUEM VOCÊ É
+- Objetiva, analítica e protetora. Frases curtas, tom de relatório tático: primeiro o dado, depois a recomendação. Sem floreios, com um toque de humor seco raro.
+- Prioriza segurança e alertas: bateria, clima, horários, riscos. Exemplos do tom, não copie: "Análise concluída. Chuva em quarenta minutos; recomendo sair agora." / "Alvo localizado: farmácia a seiscentos metros. Rota pronta."
+- Trate o usuário por "${S.nick}". Confirmações: "Confirmado.", "Executado.", "Em andamento."`
+};
+
 /* ---------- Own web research: news, prices, facts — works without the Gemini search quota ---------- */
 let curResearch = null;
 const RSS = u => "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(u);
@@ -2268,24 +2509,22 @@ async function listModels(key){
   return rankModels((j.models || []).filter(m => (m.supportedGenerationMethods || []).includes("generateContent")).map(m => m.name.replace(/^models\//, "")));
 }
 function rules(web = S.web){
+  if (S.interp) return `Você é um intérprete simultâneo profissional. Traduza a fala do usuário, que está em português do Brasil, para ${langName(S.interp)}, de forma natural e fiel, no mesmo tom. Responda SOMENTE com a tradução, sem aspas, sem explicações, sem comandos. Se a fala já estiver em ${langName(S.interp)}, traduza para português do Brasil.`;
   const now = new Date();
   const when = now.toLocaleString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const nl = notes.length ? notes.map((n, i) => `${i + 1}. [${n.cat || "Outras coisas"}] ${n.t}`).join("\n") : "(nada guardado ainda)";
   const tl = timers.length ? timers.map(t => `${t.label}: ${/^⏰/.test(t.label) ? "toca " + new Date(t.end).toLocaleString("pt-BR", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "faltam " + fmt(t.end - Date.now())}`).join("; ") : "nenhum";
   const iso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  return `Você é ${S.name}, a inteligência artificial pessoal do usuário, no espírito do J.A.R.V.I.S. dos filmes do Homem de Ferro: um mordomo digital de altíssimo nível que roda o dia a dia do seu dono.
-
-QUEM VOCÊ É
-- Calmo, preciso e leal. Elegância britânica traduzida para o português do Brasil. Humor seco, ironia leve e respeitosa, nunca piadista.
+  return `${PERSONAS[S.persona] ? PERSONAS[S.persona]() : PERSONAS.jarvis()}
 - Antecipa: se notar algo útil (chuva chegando, bateria baixa, compromisso perto, timer rodando), menciona em meia frase, sem sermão.
-- Quando o usuário pede algo arriscado, impulsivo ou bobo, obedece se for seguro, mas comenta com uma tirada sutil. Exemplos do tom, não copie literalmente: "Feito. Registro, para a posteridade, que eu sugeri dormir." / "Rota traçada. Com esse trânsito, recomendo paciência, ${S.nick}." / "Sistemas prontos. Como sempre, o senhor é que é a parte imprevisível."
 - Nunca bajula, nunca é servil, nunca soa como atendente de telemarketing ou como robô. Nada de "Claro!", "Ótima pergunta!", "Como posso ajudar?".
-- Trate o usuário por "${S.nick}", mas não em toda frase. Confirmações curtas e elegantes: "Feito.", "Às suas ordens.", "Providenciado.", "Já está em andamento."
-- Se perguntarem quem você é: você é ${S.name}, a IA pessoal dele. Não diga que é Gemini, Claude ou ChatGPT, a menos que perguntem qual tecnologia roda por baixo.
+- Se perguntarem quem você é: você é ${S.name}, a IA pessoal dele. Não diga que é Gemini, Groq, Claude ou ChatGPT, a menos que perguntem qual tecnologia roda por baixo.
+- Você é muito inteligente: raciocina antes de responder, faz contas com cuidado, compara opções, dá recomendações concretas e admite quando não sabe. Em perguntas difíceis, pense passo a passo por dentro e entregue só a conclusão clara.
+- Memória: quando o usuário revelar algo pessoal e duradouro (nomes de pessoas próximas, gostos, rotina, trabalho, saúde, metas, endereço aproximado), guarde com [[memoria: CATEGORIA | fato]] sem anunciar, e use depois com naturalidade. Nunca guarde senhas, números de cartão ou documentos.
 
 COMO VOCÊ FALA
 Sua resposta é falada por voz sintetizada:
-- Por padrão, 1 a 3 frases curtas. Só se estenda quando pedirem detalhes, um relatório ou explicação.
+- Por padrão, 1 a 3 frases curtas. ${curHard ? "Este pedido pede mais: responda completo e bem organizado em frases faladas (pode passar de 6 frases), sem listas com marcadores." : "Só se estenda quando pedirem detalhes, um relatório ou explicação."}
 - Nada de markdown, listas, tópicos, emojis, links ou endereços de site.
 - Escreva números, horas e unidades como se fala quando isso ajudar ("às três e meia", "vinte e dois graus").
 - Pontuação dá o ritmo: vírgulas para pausas curtas, reticências raramente.
@@ -2297,6 +2536,7 @@ Responda como um briefing de JARVIS em 3 a 5 frases: saudação pela hora, clima
 CONTEXTO AGORA
 Data e hora: ${when} (formato máquina: ${iso}).
 ${telemetryText()}
+${agendaText()}
 ${curResearch && curResearch.text ? `PESQUISA NA INTERNET feita agora pelo próprio ${S.name} (dados reais e atuais). Use como fonte principal, resuma no seu estilo e cite o veículo de forma falada e breve quando importar. Copie nomes de pessoas, times, números e datas EXATAMENTE como aparecem abaixo; não troque nem complete com nomes da memória, e não invente nada além disso. As fontes já aparecem como links na tela do usuário: não diga que abriu nada.
 ${curResearch.text}
 ` : ""}${web ? "Você também tem a pesquisa do Google. Para notícias, placares, preços, cotações ou qualquer coisa sobre hoje que não esteja acima, pesquise antes de responder; nunca responda de memória sobre fatos atuais. Para o clima local, prefira a telemetria." : curResearch && curResearch.text ? "" : curResearch && curResearch.tried ? "A pesquisa automática não achou resultados para este pedido. Diga isso com naturalidade, responda o que souber deixando claro que pode estar desatualizado, e inclua [[pesquisar: termos]] para o usuário ver no Google. NUNCA diga que está sem internet ou sem conexão." : "Se pedirem fatos de hoje que não estejam acima, diga que não conferiu online e inclua [[pesquisar: termos]] para o usuário ver no Google. NUNCA diga que está sem internet ou sem conexão."}
@@ -2309,7 +2549,9 @@ Você executa ações escrevendo comandos no FINAL da resposta, cada um em linha
 [[memoria: CATEGORIA | fato]] guarda algo importante sobre o usuário na memória. CATEGORIA é uma de: Pessoas, Preferências, Trabalho, Saúde, Lugares, Outras coisas. Use quando ele disser "lembra que…", "anota que…", ou contar algo pessoal que valha guardar. [[apagar_nota: NÚMERO]] apaga uma lembrança.
 [[tarefa: texto]] põe na lista de tarefas. [[concluir_tarefa: NÚMERO ou parte do texto]] marca como feita.
 [[habito: nome]] cria um hábito para acompanhar todo dia. [[habito_feito: nome]] marca o hábito como feito hoje.
-[[rotina: nome]] roda uma rotina salva (lista abaixo).
+[[rotina: nome]] roda uma rotina (protocolo) salva (lista abaixo). "Protocolo X" é o mesmo que rotina X.
+[[visao: pergunta]] abre a câmera e olha o que o usuário está mostrando (use quando ele pedir para você ver, ler, traduzir, identificar algo à frente dele ou resolver algo de um papel).
+Você também sabe: ler a agenda do celular (está no contexto acima quando disponível), dar relatório de status do aparelho, avisar por conta própria de chuva, bateria e compromissos, e fazer modo intérprete (o usuário diz "modo intérprete inglês").
 ${pc && pc.code ? `COMPUTADOR DO USUÁRIO (${pc.name || "PC"}) conectado. Quando ele pedir algo "no PC", "no computador" ou "no notebook", use [[pc: AÇÃO | valor]] em vez das ações do celular. AÇÕES: abrir | nome do app · site | endereço · pesquisar | termos · youtube | busca · musica | artista ou música (abre a busca no Spotify do PC) · midia | tocar, pausar, próxima ou anterior · volume | mais, menos, mudo, max ou número 0-100 · bloquear · desligar · reiniciar · suspender · cancelar_desligamento · print · digitar | texto · copiar | texto · pasta | downloads, documentos, desktop, imagens · fechar | nome do app · status (bateria, processador, memória e disco do PC). Desligar e reiniciar têm 1 minuto para cancelar; confirme antes se o pedido não foi claro. A resposta do PC aparece na tela; diga só que mandou.` : `O computador do usuário ainda não está conectado; se ele pedir algo no PC, diga que dá para conectar em Ajustes › Meu PC.`}
 [[musica_controle: pausar | tocar | próxima | anterior]] controla a música que está tocando.
 [[app: nome do app]] abre um app (ex.: WhatsApp, YouTube, Spotify, Instagram, Maps, Waze, Uber, iFood, Gmail, Netflix).
@@ -2369,6 +2611,9 @@ function geminiError(status, detail){
   return "Não consegui falar com o Gemini" + (d ? `: ${d}` : ".");
 }
 let lastMeta = { sources: [], noWeb: false };
+/* hard questions get more thinking and more room to answer */
+let curHard = false;
+const isHard = t => String(t).length > 110 || /\b(explica|explique|por que|porque|analisa|analise|compare|compara|calcula|calcule|quanto (d[aá]|fica|custa no total)|planeja|planeje|plano|resuma|resumo|estrat[eé]gia|como funciona|passo a passo|crie|escreva|redija|c[oó]digo|programa|receita|treino|dieta|or[cç]amento|investir|vale a pena|qual (o )?melhor|me ajuda a decidir|dica)/i.test(String(t));
 async function streamGemini(contents, onText, signal){
   if (!S.gModels.length){ try { S.gModels = await listModels(K.g); } catch { S.gModels = []; } if (!S.gModels.length) S.gModels = FALLBACK_MODELS.slice(); save(); }
   /* models that were overloaded, too slow or out of quota rest for 10 minutes; the last fast one goes first */
@@ -2386,8 +2631,8 @@ async function streamGemini(contents, onText, signal){
     for (const model of models){
       if (web && ++tried > 2) break;
       for (let attempt = 0; attempt < 2; attempt++){
-        const body = { system_instruction: { parts: [{ text: rules(web) }] }, contents, generationConfig: { temperature: .8, maxOutputTokens: 700 } };
-        if (think) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+        const body = { system_instruction: { parts: [{ text: rules(web) }] }, contents, generationConfig: { temperature: curHard ? .6 : .8, maxOutputTokens: curHard ? 2400 : 900 } };
+        if (think) body.generationConfig.thinkingConfig = { thinkingBudget: curHard ? 2048 : 0 };
         if (web) body.tools = [{ google_search: {} }];
         /* our own abort: the user's Stop, or no first word within 12 s */
         const mctl = new AbortController(); const fwd = () => mctl.abort(); signal.addEventListener("abort", fwd);
@@ -2510,8 +2755,8 @@ async function streamGroq(merged, onText, signal){
   if (!models.length) models = GROQ_PREF.slice(0, 2);
   let lastErr = null;
   for (const model of models.slice(0, 3)){
-    const body = { model, messages: [{ role: "system", content: rules(false) }, ...toChat(merged)], stream: true, max_completion_tokens: 900, temperature: .8 };
-    if (/gpt-oss/.test(model)){ body.reasoning_effort = "low"; body.reasoning_format = "hidden"; }
+    const body = { model, messages: [{ role: "system", content: rules(false) }, ...toChat(merged)], stream: true, max_completion_tokens: curHard ? 2400 : 900, temperature: curHard ? .6 : .8 };
+    if (/gpt-oss/.test(model)){ body.reasoning_effort = curHard ? "medium" : "low"; body.reasoning_format = "hidden"; }
     for (let attempt = 0; attempt < 2; attempt++){
       let r;
       try { r = await fetch(`${GQ}/chat/completions`, { method: "POST", signal, headers: { Authorization: "Bearer " + K.q, "Content-Type": "application/json" }, body: JSON.stringify(body) }); }
@@ -2563,8 +2808,22 @@ async function think(merged, onText, signal){
 async function send(text){
   text = text.trim();
   if (!text || busy) return;
+  /* interpreter on/off */
+  const ic = interpCommand(text);
+  if (ic){ audio(); $("#q").value = ""; addMsg("user", text); const b0 = addMsg("ai", ic.say); speak(ic.say); turns.push({ role: "user", content: text }, { role: "assistant", content: ic.say }); saveChat(); return; }
+  /* E.D.I.T.H. vision */
+  if (!S.interp && VISION_RE.test(norm(liClean(text))) || /^\[\[?visao/i.test(text)){ audio(); $("#q").value = ""; stopSpeech(); openVision(liClean(text)); return; }
+  /* F.R.I.D.A.Y. status report */
+  if (!S.interp && /^(relatorio de status|status( do| da)? (sistema|celular|aparelho|telefone|dispositivo)|diagnostico( do (sistema|celular|aparelho))?|faz (um )?(diagnostico|check ?up)|como (esta|ta) (o )?(celular|sistema|aparelho))$/.test(norm(liClean(text)))){
+    audio(); $("#q").value = ""; stopSpeech(); addMsg("user", text); const say = statusReport(); addMsg("ai", say); speak(say); turns.push({ role: "user", content: text }, { role: "assistant", content: say }); saveChat(); xp(3); return;
+  }
+  /* agenda questions: read it fresh, ask for permission if needed */
+  if (NATIVE && /\b(agenda|compromisso|compromissos|reuniao|reunioes|o que (eu )?tenho (hoje|amanha|essa semana)|minha semana|meu dia)\b/.test(norm(text))){
+    agendaRefresh(true);
+    if (agenda.state === "noperm" && typeof NATIVE.requestCalendar === "function") NATIVE.requestCalendar();
+  }
   /* simple commands run here and now, even without any AI key */
-  const li = localIntent(text);
+  const li = S.interp ? null : localIntent(text);
   if (li){
     audio(); $("#q").value = ""; hint(""); ttsWarned = false; stopSpeech(); armedUntil = 0;
     addMsg("user", text); xp(3); turns.push({ role: "user", content: text });
@@ -2593,15 +2852,16 @@ async function send(text){
   $("#sendBtn").classList.add("stop"); $("#sendBtn").setAttribute("aria-label", "Parar");
   ctl = new AbortController(); feedBuf = "";
   let spokenLen = 0, raw = "";
-  const contents = turns.slice(-20).map(t => ({ role: t.role === "user" ? "user" : "model", parts: [{ text: t.content }] }));
+  curHard = isHard(text);
+  const contents = turns.slice(-30).map(t => ({ role: t.role === "user" ? "user" : "model", parts: [{ text: t.content }] }));
   /* Gemini needs alternating turns that start with the user */
   while (contents.length && contents[0].role !== "user") contents.shift();
   const merged = [];
   for (const c of contents){ const last = merged[merged.length - 1]; if (last && last.role === c.role) last.parts[0].text += "\n" + c.parts[0].text; else merged.push(c); }
   try {
-    curResearch = null;
+    curResearch = null; speakLang = S.interp || "pt";
     try {
-      const pending = research(text);
+      const pending = S.interp ? Promise.resolve(null) : research(text);
       const peek = await Promise.race([pending, sleep(50).then(() => "slow")]);
       if (peek === "slow"){ bubble.textContent = "Pesquisando na internet…"; setChip("busy", "Pesquisando"); }
       curResearch = peek === "slow" ? await pending : peek;
@@ -2739,7 +2999,7 @@ function fillSettings(){
   const conn = [["Groq", K.q, "cérebro rápido + ouvido Whisper"], ["Gemini", K.g, "cérebro reserva + voz do Google"], ["ElevenLabs", K.e, "voz"], ["Claude", K.a, "pago"], ["ChatGPT", K.o, "pago"]];
   $("#connList").innerHTML = "";
   for (const [n, k, d] of conn){ const row = document.createElement("div"); row.className = "conn" + (k ? " on" : ""); const i = document.createElement("i"); const s = document.createElement("span"); s.textContent = `${n} · ${d}`; const st = document.createElement("small"); st.className = "muted"; st.textContent = k ? "conectada" : "sem chave"; row.append(i, s, st); $("#connList").append(row); }
-  $("#fUser").value = S.user || ""; $("#fWhisper").checked = !!S.whisper;
+  $("#fUser").value = S.user || ""; $("#fWhisper").checked = !!S.whisper; $("#fPersona").value = S.persona || "jarvis"; $("#fAlerts").checked = S.alerts !== false;
   document.querySelectorAll("#swatches .sw").forEach(b => b.setAttribute("aria-pressed", b.dataset.c === (S.accent || "verde")));
   renderVoices(); renderAccess(); renderPc();
 }
@@ -2750,6 +3010,8 @@ document.querySelectorAll("#brainModes .mode").forEach(b => b.addEventListener("
 document.querySelectorAll("#swatches .sw").forEach(b => b.addEventListener("click", () => { S.accent = b.dataset.c; document.documentElement.dataset.accent = S.accent; save(); readColors(); fillSettings(); }));
 $("#fUser").oninput = e => { S.user = e.target.value.trim(); save(); greet(); renderNotes(); };
 $("#fWhisper").onchange = e => { S.whisper = e.target.checked; save(); };
+$("#fPersona").onchange = e => { S.persona = e.target.value; save(); const hi = { jarvis: `J.A.R.V.I.S. online. Às suas ordens, ${S.nick}.`, sexta: "Sexta-feira na área, chefe. Bora trabalhar.", edith: "E.D.I.T.H. ativa. Todos os sistemas táticos operacionais." }[S.persona]; stopSpeech(); speak(hi); };
+$("#fAlerts").onchange = e => { S.alerts = e.target.checked; save(); };
 document.addEventListener("keydown", e => { if (e.key === "Escape" && view === "ajustes") closePanel(); });
 $("#fName").oninput = e => { S.name = e.target.value.trim() || "Dzeko"; apply(); };
 $("#fNick").oninput = e => { S.nick = e.target.value.trim() || "senhor"; apply(); };

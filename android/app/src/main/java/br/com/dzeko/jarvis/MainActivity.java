@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
     static final String HOME = "https://vitor12v.github.io/Dzeko-vit1109/";
     static final String HOST = "vitor12v.github.io";
 
-    static final int REQ_MIC = 10, REQ_GEO = 11, REQ_CALL = 12, REQ_CAL = 13, REQ_START = 14, REQ_CONTACTS = 15;
+    static final int REQ_MIC = 10, REQ_GEO = 11, REQ_CALL = 12, REQ_CAL = 13, REQ_START = 14, REQ_CONTACTS = 15, REQ_CALREAD = 16;
 
     WebView web;
     Bridge bridge;
@@ -77,10 +77,16 @@ public class MainActivity extends Activity {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
                 runOnUiThread(() -> {
-                    if (has(Manifest.permission.RECORD_AUDIO)) request.grant(request.getResources());
+                    // microphone and/or camera (camera only for the vision mode the user opens)
+                    java.util.ArrayList<String> need = new java.util.ArrayList<>();
+                    for (String r : request.getResources()) {
+                        if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r) && !has(Manifest.permission.RECORD_AUDIO)) need.add(Manifest.permission.RECORD_AUDIO);
+                        if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r) && !has(Manifest.permission.CAMERA)) need.add(Manifest.permission.CAMERA);
+                    }
+                    if (need.isEmpty()) request.grant(request.getResources());
                     else {
                         pendingWebMic = request;
-                        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
+                        requestPermissions(need.toArray(new String[0]), REQ_MIC);
                     }
                 });
             }
@@ -134,7 +140,9 @@ public class MainActivity extends Activity {
         switch (requestCode) {
             case REQ_MIC:
                 if (pendingWebMic != null) {
-                    if (ok) pendingWebMic.grant(pendingWebMic.getResources());
+                    boolean all = results.length > 0;
+                    for (int r : results) if (r != PackageManager.PERMISSION_GRANTED) all = false;
+                    if (all) pendingWebMic.grant(pendingWebMic.getResources());
                     else pendingWebMic.deny();
                     pendingWebMic = null;
                 }
@@ -153,6 +161,9 @@ public class MainActivity extends Activity {
                 break;
             case REQ_CONTACTS:
                 bridge.onContactsPermission(ok);
+                break;
+            case REQ_CALREAD:
+                emit("perm", "calendar", "{\"ok\":" + ok + "}");
                 break;
             default:
                 break;

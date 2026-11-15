@@ -368,6 +368,91 @@ public class Bridge {
         act.ask(new String[]{Manifest.permission.READ_CONTACTS}, MainActivity.REQ_CONTACTS);
     }
 
+    // ---------------------------------------------------------------- agenda (read)
+
+    @JavascriptInterface
+    public boolean hasCalendar() {
+        return act.has(Manifest.permission.READ_CALENDAR);
+    }
+
+    @JavascriptInterface
+    public void requestCalendar() {
+        act.ask(new String[]{Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR}, MainActivity.REQ_CALREAD);
+    }
+
+    @JavascriptInterface
+    public String readEvents(double startMs, double endMs) {
+        if (!act.has(Manifest.permission.READ_CALENDAR)) return "noperm";
+        org.json.JSONArray out = new org.json.JSONArray();
+        Uri.Builder b = CalendarContract.Instances.CONTENT_URI.buildUpon();
+        android.content.ContentUris.appendId(b, (long) startMs);
+        android.content.ContentUris.appendId(b, (long) endMs);
+        String[] cols = {CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.END,
+                CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_LOCATION};
+        try (Cursor c = ctx.getContentResolver().query(b.build(), cols, null, null, CalendarContract.Instances.BEGIN + " ASC")) {
+            while (c != null && c.moveToNext() && out.length() < 40) {
+                JSONObject o = new JSONObject();
+                o.put("title", c.getString(0) == null ? "(sem título)" : c.getString(0));
+                long begin = c.getLong(1);
+                boolean allDay = c.getInt(3) == 1;
+                if (allDay) {   // all-day instances are stored in UTC midnight
+                    java.util.Calendar u = java.util.Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+                    u.setTimeInMillis(begin);
+                    java.util.Calendar l = java.util.Calendar.getInstance();
+                    l.clear();
+                    l.set(u.get(java.util.Calendar.YEAR), u.get(java.util.Calendar.MONTH), u.get(java.util.Calendar.DAY_OF_MONTH));
+                    begin = l.getTimeInMillis();
+                }
+                o.put("begin", begin);
+                o.put("end", c.getLong(2));
+                o.put("allDay", allDay);
+                o.put("location", c.getString(4) == null ? "" : c.getString(4));
+                out.put(o);
+            }
+        } catch (Exception e) {
+            return "[]";
+        }
+        return out.toString();
+    }
+
+    // ---------------------------------------------------------------- diagnostics
+
+    @JavascriptInterface
+    public String deviceStatus() {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("model", Build.MANUFACTURER + " " + Build.MODEL);
+            o.put("android", Build.VERSION.RELEASE);
+            Intent bi = ctx.registerReceiver(null, new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (bi != null) {
+                int lvl = bi.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1), sc = bi.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100);
+                if (lvl >= 0) o.put("battery", Math.round(lvl * 100f / sc));
+                int st = bi.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
+                o.put("charging", st == android.os.BatteryManager.BATTERY_STATUS_CHARGING || st == android.os.BatteryManager.BATTERY_STATUS_FULL);
+                int t = bi.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, 0);
+                if (t > 0) o.put("tempC", t / 10.0);
+            }
+            android.app.ActivityManager am = (android.app.ActivityManager) ctx.getSystemService(Context.ACTIVITY_SERVICE);
+            android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            o.put("ramFreeGB", mi.availMem / 1e9);
+            o.put("ramTotalGB", mi.totalMem / 1e9);
+            android.os.StatFs fs = new android.os.StatFs(android.os.Environment.getDataDirectory().getPath());
+            o.put("storageFreeGB", fs.getAvailableBytes() / 1e9);
+            o.put("storageTotalGB", fs.getTotalBytes() / 1e9);
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+            android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            String net = "sem conexão";
+            if (nc != null) {
+                if (nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) net = "Wi-Fi";
+                else if (nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)) net = "dados móveis";
+                else net = "conectado";
+            }
+            o.put("network", net);
+        } catch (Exception ignored) { }
+        return o.toString();
+    }
+
     // ---------------------------------------------------------------- phone control
     // No accessibility service: in Brazil, Play Protect blocks sideloaded apps that declare one.
 
@@ -681,6 +766,14 @@ public class Bridge {
         tts.setPitch(pitch <= 0 ? 1f : pitch);
         Bundle p = new Bundle();
         tts.speak(text == null ? "" : text, TextToSpeech.QUEUE_ADD, p, id);
+    }
+
+    @JavascriptInterface
+    public void ttsSpeak2(String id, String text, float rate, float pitch, String lang) {
+        if (ttsReady && lang != null && !lang.isEmpty()) {
+            try { tts.setLanguage(Locale.forLanguageTag(lang.startsWith("pt") ? "pt-BR" : lang)); } catch (Exception ignored) { }
+        }
+        ttsSpeak(id, text, rate, pitch);
     }
 
     @JavascriptInterface
